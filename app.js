@@ -594,3 +594,198 @@ async function setupRealtimeFinal(){
 }
 setTimeout(()=>setupRealtimeFinal(),1200);
 setTimeout(()=>loadFinalCanonical(),1500);
+
+
+/* ============================================================
+   EXCHANGE / INQUIRY CHAT LIFECYCLE
+   ============================================================ */
+let activeExchangeChat=null;
+let activeInquiry=null;
+
+async function renderExchangeFinal(){
+  const box=$("#exchangeList"), select=$("#exchangeChatSelect");
+  if(!box||!sb||!session){
+    if(box)box.innerHTML="<p>"+t("ログイン後に利用できます。","Sign in to use exchanges.")+"</p>";
+    return;
+  }
+  const posts=await sb.from("exchange_posts").select("*").order("created_at",{ascending:false}).limit(100);
+  if(posts.error){box.textContent=posts.error.message;return}
+  let html="";
+  for(const p of posts.data||[]){
+    const name=sprites.find(s=>s.id===p.sprite_id)?.name||p.sprite_id;
+    let actions="";
+    if(p.owner_id===session.user.id){
+      const rr=await sb.from("exchange_requests").select("*").eq("post_id",p.id).order("created_at",{ascending:false});
+      actions=(rr.data||[]).map(q=>{
+        const st=q.status;
+        if(st==="pending")return '<div class="row"><span>申請 '+esc(q.requester_id)+'</span><button data-accept="'+q.id+'">承認</button><button data-reject="'+q.id+'" class="secondary">拒否</button></div>';
+        return '<small>申請者 '+esc(q.requester_id)+' · '+esc(st)+'</small>';
+      }).join("");
+    }else if(p.status==="open"){
+      actions='<button data-exchange="'+p.id+'">応募</button>';
+    }
+    html+='<div class="list-item"><b>'+esc(name)+'</b><small>'+esc(p.type)+' · '+esc(p.status)+' · '+timeText(p.created_at)+'</small>'+actions+'</div>';
+  }
+  box.innerHTML=html||"<p>"+t("交換募集はありません。","No exchange posts.")+"</p>";
+  $$("[data-exchange]").forEach(b=>b.onclick=async()=>{
+    const {error}=await sb.from("exchange_requests").insert({post_id:b.dataset.exchange,requester_id:session.user.id,message:"交換を希望します"});
+    if(error)alert(error.message);else renderExchangeFinal();
+  });
+  $$("[data-accept]").forEach(b=>b.onclick=async()=>{
+    const {error}=await sb.from("exchange_requests").update({status:"accepted"}).eq("id",b.dataset.accept).eq("status","pending");
+    if(error)alert(error.message);else{await sb.from("audit_logs").insert({actor_id:session.user.id,action:"exchange_accept",details:{request_id:b.dataset.accept}});await renderExchangeFinal();await renderExchangeChatsFinal()}
+  });
+  $$("[data-reject]").forEach(b=>b.onclick=async()=>{
+    const {error}=await sb.from("exchange_requests").update({status:"rejected"}).eq("id",b.dataset.reject).eq("status","pending");
+    if(error)alert(error.message);else renderExchangeFinal();
+  });
+  await renderExchangeChatsFinal();
+}
+
+async function renderExchangeChatsFinal(){
+  const select=$("#exchangeChatSelect");if(!select||!sb||!session)return;
+  const r=await sb.from("exchange_chats").select("*").order("created_at",{ascending:false});
+  if(r.error)return;
+  const chats=[];
+  for(const ch of r.data||[]){
+    const mem=await sb.from("exchange_chat_members").select("user_id,member_role").eq("chat_id",ch.id);
+    if((mem.data||[]).some(m=>m.user_id===session.user.id)||profile?.role==="admin"||profile?.role==="superadmin")chats.push(ch);
+  }
+  select.innerHTML=chats.map(ch=>'<option value="'+ch.id+'">'+ch.id.slice(0,8)+' · '+esc(ch.status)+'</option>').join("");
+  if(activeExchangeChat&&!chats.some(x=>x.id===activeExchangeChat))activeExchangeChat=null;
+  if(!activeExchangeChat)activeExchangeChat=chats[0]?.id||null;
+  if(activeExchangeChat)select.value=activeExchangeChat;
+  $("#joinExchangeAsAdmin")?.classList.toggle("hidden",!(profile?.role==="admin"||profile?.role==="superadmin"));
+  await renderExchangeChatFinal();
+}
+$("#exchangeChatSelect")?.addEventListener("change",e=>{activeExchangeChat=e.target.value;renderExchangeChatFinal()});
+
+async function renderExchangeChatFinal(){
+  const box=$("#exchangeChatBox");if(!box||!activeExchangeChat||!sb||!session){if(box)box.innerHTML="<p>"+t("交換チャットを選択してください。","Select an exchange chat.")+"</p>";return}
+  const r=await sb.from("exchange_chat_messages").select("*").eq("chat_id",activeExchangeChat).order("created_at");
+  if(r.error){box.textContent=r.error.message;return}
+  box.innerHTML="";
+  for(const m of r.data||[]){
+    const wrap=document.createElement("div");wrap.className="message "+(m.sender_id===session.user.id?"mine":"");
+    const body=document.createElement("div");body.textContent=m.body;
+    const meta=document.createElement("small");meta.textContent=timeText(m.created_at);
+    const tr=document.createElement("button");tr.className="secondary";tr.textContent=t("翻訳","Translate");
+    tr.onclick=async()=>{tr.disabled=true;const v=await translateMessage(m.id,m.body,"exchange");if(v){body.textContent=v;tr.textContent=t("原文","Original");tr.onclick=()=>{body.textContent=m.body;tr.textContent=t("翻訳","Translate")}}tr.disabled=false};
+    wrap.append(body,meta,tr);box.appendChild(wrap);
+    if(autoTranslate&&m.sender_id!==session.user.id){const v=await translateMessage(m.id,m.body,"exchange");if(v)body.textContent=v}
+  }
+}
+$("#sendExchangeChat")?.addEventListener("click",async()=>{
+  if(!activeExchangeChat||!sb||!session)return;
+  const body=$("#exchangeChatMessage").value.trim();if(!body)return;
+  const {error}=await sb.from("exchange_chat_messages").insert({chat_id:activeExchangeChat,sender_id:session.user.id,body,source_language:lang});
+  if(error)alert(error.message);else{$("#exchangeChatMessage").value="";renderExchangeChatFinal()}
+});
+$("#joinExchangeAsAdmin")?.addEventListener("click",async()=>{
+  if(!activeExchangeChat||!sb||!["admin","superadmin"].includes(profile?.role||""))return;
+  const {error}=await sb.from("exchange_chat_members").upsert({chat_id:activeExchangeChat,user_id:session.user.id,member_role:"admin"},{onConflict:"chat_id,user_id"});
+  if(error)alert(error.message);else{
+    await sb.from("exchange_chat_messages").insert({chat_id:activeExchangeChat,sender_id:session.user.id,body:"🛡️ 管理者がこの交換チャットに参加しました。",source_language:lang});
+    await sb.from("audit_logs").insert({actor_id:session.user.id,action:"exchange_admin_join",details:{chat_id:activeExchangeChat}});
+    renderExchangeChatFinal();
+  }
+});
+$("#reportExchange")?.addEventListener("click",async()=>{
+  if(!activeExchangeChat||!sb||!session)return;
+  const details=prompt(t("交換トラブルの詳細を入力してください。","Describe the exchange problem."));
+  if(!details)return;
+  const {error}=await sb.from("exchange_issues").insert({chat_id:activeExchangeChat,reporter_id:session.user.id,details});
+  if(error)alert(error.message);else alert(t("問い合わせを作成しました。","Issue report created."));
+});
+
+async function renderInquiriesFinal(){
+  const list=$("#inquiryList"),select=$("#inquirySelect");
+  if(!list||!sb||!session)return;
+  const r=await sb.from("inquiries").select("*").eq("user_id",session.user.id).order("created_at",{ascending:false});
+  if(r.error){list.textContent=r.error.message;return}
+  list.innerHTML=(r.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.subject)+'</b><small>'+esc(x.status)+' · '+timeText(x.created_at)+'</small></div>').join("")||"<p>"+t("問い合わせはありません。","No inquiries.")+"</p>";
+  select.innerHTML=(r.data||[]).map(x=>'<option value="'+x.id+'">'+esc(x.subject)+'</option>').join("");
+  if(activeInquiry&&!r.data.some(x=>x.id===activeInquiry))activeInquiry=null;
+  if(!activeInquiry)activeInquiry=r.data?.[0]?.id||null;
+  if(activeInquiry)select.value=activeInquiry;
+  await renderInquiryChatFinal();
+}
+$("#inquirySelect")?.addEventListener("change",e=>{activeInquiry=e.target.value;renderInquiryChatFinal()});
+
+async function renderInquiryChatFinal(){
+  const box=$("#inquiryChatBox");if(!box||!sb||!session||!activeInquiry)return;
+  const r=await sb.from("inquiry_messages").select("*").eq("inquiry_id",activeInquiry).order("created_at");
+  if(r.error){box.textContent=r.error.message;return}
+  box.innerHTML="";
+  for(const m of r.data||[]){
+    const wrap=document.createElement("div");wrap.className="message "+(m.sender_id===session.user.id?"mine":"");
+    const body=document.createElement("div");body.textContent=m.body;
+    const meta=document.createElement("small");meta.textContent=timeText(m.created_at);
+    const tr=document.createElement("button");tr.className="secondary";tr.textContent=t("翻訳","Translate");
+    tr.onclick=async()=>{tr.disabled=true;const v=await translateMessage(m.id,m.body,"inquiry");if(v){body.textContent=v;tr.textContent=t("原文","Original");tr.onclick=()=>{body.textContent=m.body;tr.textContent=t("翻訳","Translate")}}tr.disabled=false};
+    wrap.append(body,meta,tr);box.appendChild(wrap);
+    if(autoTranslate&&m.sender_id!==session.user.id){const v=await translateMessage(m.id,m.body,"inquiry");if(v)body.textContent=v}
+  }
+}
+$("#sendInquiryMessage")?.addEventListener("click",async()=>{
+  if(!sb||!session||!activeInquiry)return;
+  const body=$("#inquiryMessage").value.trim();if(!body)return;
+  const {data,error}=await sb.from("inquiry_messages").insert({inquiry_id:activeInquiry,sender_id:session.user.id,body,source_language:lang}).select("id").single();
+  if(error){alert(error.message);return}
+  const file=$("#inquiryImage")?.files?.[0];
+  if(file&&data?.id){
+    const path="support/"+session.user.id+"/"+activeInquiry+"/"+Date.now()+"-"+file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+    const up=await sb.storage.from("support").upload(path,file,{contentType:file.type,upsert:false});
+    if(!up.error)await sb.from("inquiry_attachments").insert({inquiry_id:activeInquiry,message_id:data.id,storage_path:path,file_name:file.name,mime_type:file.type});
+  }
+  $("#inquiryMessage").value="";if($("#inquiryImage"))$("#inquiryImage").value="";renderInquiryChatFinal();
+});
+
+const originalRenderSocial=renderSocial;
+renderSocial=async function(){
+  await renderExchangeFinal();
+  await renderInquiriesFinal();
+  await renderChatFinal();
+};
+
+$("#createInquiry")?.addEventListener("click",async()=>{
+  if(!sb||!session)return alert(t("ログインしてください。","Sign in first."));
+  const subject=$("#inquirySubject").value.trim();if(!subject)return;
+  const {data,error}=await sb.from("inquiries").insert({user_id:session.user.id,subject,status:"open"}).select("id").single();
+  if(error)alert(error.message);else{$("#inquirySubject").value="";activeInquiry=data.id;await renderInquiriesFinal()}
+});
+
+/* Superadmin-only role management and user email view. */
+async function changeUserRoleFinal(userId,role){
+  if(profile?.role!=="superadmin"||userId===session.user.id)return;
+  const reason=prompt(t("権限変更の理由を入力してください。","Enter a reason for the role change."));
+  if(reason===null)return;
+  const {error}=await sb.rpc("set_admin_role",{p_target:userId,p_new_role:role,p_reason:reason});
+  if(error)alert(error.message);else await renderAdmin();
+}
+changeUserRole=changeUserRoleFinal;
+
+async function renderAdminFinal(){
+  const ok=profile&&(profile.role==="admin"||profile.role==="superadmin");
+  $("#adminPanel")?.classList.toggle("hidden",!ok);
+  if(!ok||!sb)return;
+  const heading=$("#adminPanel h2");if(heading)heading.textContent=profile.role==="superadmin"?"👑 最上位管理者":"🛡️ 管理者";
+  try{
+    const ur=await sb.functions.invoke("admin-users",{body:{}});
+    if(ur.error)throw ur.error;
+    const users=ur.data?.users||[];
+    $("#userList").innerHTML=users.map(x=>{
+      const roleButtons=profile.role==="superadmin"&&x.id!==session.user.id?
+        '<button data-role-user-final="'+x.id+'" data-role-final="admin">管理者</button><button class="secondary" data-role-user-final="'+x.id+'" data-role-final="user">一般</button>':"";
+      return '<div class="list-item"><b>'+esc(x.display_name||x.email||x.id)+'</b><small>'+esc(x.email)+' · '+esc(x.role)+' · '+timeText(x.created_at)+(x.suspended?" · 停止中":"")+'</small><div class="row"><button data-user-final="'+x.id+'">Sprite編集</button>'+roleButtons+'</div></div>';
+    }).join("")||"<p>ユーザーなし</p>";
+    $$("[data-user-final]").forEach(b=>b.onclick=()=>openAdminUser(b.dataset.userFinal));
+    $$("[data-role-user-final]").forEach(b=>b.onclick=()=>changeUserRoleFinal(b.dataset.roleUserFinal,b.dataset.roleFinal));
+  }catch(e){console.warn(e)}
+  const a=await sb.from("audit_logs").select("*").order("created_at",{ascending:false}).limit(100);
+  $("#auditList").innerHTML=(a.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.action)+'</b><small>'+esc(x.actor_id||"")+" → "+esc(x.target_user_id||"")+" · "+timeText(x.created_at)+'</small></div>').join("")||"<p>ログなし</p>";
+  await renderAdminExchanges();await renderAdminInquiries();await renderAdminAnnouncements();
+}
+renderAdmin=renderAdminFinal;
+
+setTimeout(()=>{updateFinalRoleUi();renderSocial().catch(()=>{})},1800);
