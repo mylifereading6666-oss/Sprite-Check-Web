@@ -106,6 +106,21 @@ function renderChecklistReview(r){
   $("#applyChecklist").onclick=()=>{let n=0,m=0;document.querySelectorAll(".detected:checked").forEach(el=>{const i=Number(el.dataset.index),s=season4[i],c=r.cells[i];if(!s||!c)return;const x=item(s.id);if(!x.manual){x.owned=true;x.master=!!c.master;x.manual=true;n++;if(c.master)m++}});save();$("#ocrStatus").textContent=n+"件を反映しました（Master "+m+"件）。";alert(n+"件を反映しました。\\nMaster "+m+"件");};
 }
 $("#recognize").onclick=async()=>{if(!selectedFiles.length)return alert("先に画像を選択してください。");const b=$("#recognize");b.disabled=true;try{const r=await checklistPixelDetect(selectedFiles[0]);recognitionResults=[];renderChecklistReview(r);$("#ocrStatus").textContent="チェックリストを解析しました。候補を確認してください。"}catch(e){console.error(e);alert("画像を解析できませんでした。")}finally{b.disabled=false;b.textContent="画像からSpriteを認識"}};
+const API_URL_KEY="sprite-check-api-url-v1";
+const DEFAULT_API="https://sprite-check-api.mylife-reading6666.workers.dev";
+function apiBase(){return ($("#apiUrl").value||localStorage.getItem(API_URL_KEY)||DEFAULT_API).trim().replace(/\/+$/,"")}
+function setApiStatus(t){const e=$("#apiStatus");if(e)e.textContent=t}
+async function apiRequest(path,options={}){
+  const res=await fetch(apiBase()+path,{...options,headers:{"Content-Type":"application/json",...(options.headers||{})}});
+  if(!res.ok)throw new Error("HTTP "+res.status);
+  const ct=res.headers.get("content-type")||"";
+  return ct.includes("application/json")?res.json():res.text();
+}
+$("#apiUrl").value=localStorage.getItem(API_URL_KEY)||DEFAULT_API;
+$("#apiUrl").addEventListener("change",()=>localStorage.setItem(API_URL_KEY,$("#apiUrl").value.trim()));
+$("#testApi").onclick=async()=>{try{setApiStatus("接続確認中…");await apiRequest("/health");setApiStatus("✅ サーバーに接続できました。")}catch(e){setApiStatus("⚠️ 接続できませんでした。サーバー側に /health エンドポイントが必要です。")}};
+$("#serverSync").onclick=async()=>{try{setApiStatus("サーバーと同期中…");const data=await apiRequest("/sprites/state",{method:"PUT",body:JSON.stringify({state})});if(data&&data.state){state=data.state;localStorage.setItem(KEY,JSON.stringify(state));render()}setApiStatus("✅ サーバー同期を実行しました。")}catch(e){setApiStatus("⚠️ 同期できませんでした。現在は端末内データを使用しています。")}};
+
 $("#export").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:"application/json"}));a.download="sprite-check-backup.json";a.click()};
 $("#restore").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{state=JSON.parse(r.result);save();alert("復元しました")}catch{alert("バックアップ形式が正しくありません")}};r.readAsText(f)};
 $("#reset").onclick=()=>{if(confirm("この端末のSprite Checkデータをリセットしますか？")){state={};save()}};
