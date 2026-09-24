@@ -7,15 +7,37 @@
 </head>
 <body>
 <div class="app">
-<header class="top"><div><h1>Sprite Check</h1><p>Spriteコレクション管理</p></div><div class="actions"><button id="theme">🌙</button><button id="lang">EN</button></div></header>
-<section class="stats"><div class="stat">所持<b id="owned">0</b></div><div class="stat">Master<b id="master">0</b></div><div class="stat">達成率<b id="rate">0%</b></div></section>
+<header class="top"><div><h1>Sprite Check</h1><p id="appSubtitle">Spriteコレクション管理</p></div><div class="actions"><button id="theme">🌙</button><button id="lang">EN</button></div></header>
+
+<section class="panel" id="authPanel"><h2 id="authTitle">アカウント</h2><div class="auth-grid">
+<input id="email" type="email" placeholder="メールアドレス"><input id="password" type="password" placeholder="パスワード">
+<input id="displayName" placeholder="表示名"><div class="row"><button id="signUp">新規登録</button><button id="signIn">ログイン</button><button id="signOut" class="secondary">ログアウト</button></div>
+</div><p id="authStatus">端末内モードで利用中です。オンライン機能を使う場合はSupabaseを設定してください。</p></section>
+
+<section class="stats"><div class="stat"><span id="ownedLabel">所持</span><b id="owned">0</b></div><div class="stat"><span id="masterLabel">Master</span><b id="master">0</b></div><div class="stat"><span id="rateLabel">達成率</span><b id="rate">0%</b></div></section>
+
 <section class="panel"><div class="toolbar"><input id="search" placeholder="Spriteを検索"><select id="seasonFilter"><option value="all">全シーズン</option><option value="c7s4">Chapter 7 Season 4</option><option value="c7s3">Chapter 7 Season 3</option></select><select id="filter"><option value="all">すべて</option><option value="owned">所持</option><option value="unowned">未所持</option><option value="master">Master</option><option value="upcoming">近日登場</option><option value="new">新着</option></select></div></section>
-<section class="panel"><div class="row"><button id="sync">Spriteデータ更新</button><span id="syncStatus">自動更新対象を確認中…</span></div><p>新しいSpriteが公開データに追加されると、次回更新時に一覧へ反映します。</p></section>
-<section class="panel"><h2>画像チェック・自動認識</h2><input id="import" type="file" accept="image/*" multiple><div id="preview" class="import-preview"></div><div class="row" style="margin-top:10px"><button id="recognize">画像からSpriteを認識</button><span id="ocrStatus">画像を選択してください。</span></div><div id="reviewResults"></div><p>認識結果は自動確定せず、候補を確認してから反映します。</p></section>
-<section class="panel"><h2>サーバー連携</h2><div class="row"><label>API URL <input id="apiUrl" type="url" placeholder="https://example.com/api"></label><button id="testApi">接続テスト</button><button id="serverSync">データ同期</button></div><p id="apiStatus">現在は端末内保存で動作しています。API URLを設定すると、対応するサーバーへ接続できます。</p></section>
-<section class="panel"><div class="row"><button id="export">バックアップ出力</button><label><button type="button" onclick="document.getElementById('restore').click()">バックアップ復元</button><input id="restore" type="file" accept=".json" hidden></label><button id="reset" class="danger">データリセット</button></div></section>
+
+<section class="panel"><div class="row"><button id="sync">Spriteデータ更新</button><span id="syncStatus">自動更新対象を確認中…</span></div><p id="syncHelp">新しいSpriteが公開データに追加されると一覧へ反映します。</p></section>
+
+<section class="panel"><h2 id="recognitionTitle">画像チェック・自動認識</h2><input id="import" type="file" accept="image/*" multiple><div id="preview" class="import-preview"></div><div class="row" style="margin-top:10px"><button id="recognize">画像からSpriteを認識</button><button id="notifyNew" class="secondary">新着通知を許可</button><span id="ocrStatus">画像を選択してください。</span></div><div id="reviewResults"></div><p id="recognitionHelp">認識結果は自動確定せず、候補を確認してから反映します。手動変更は自動認識で上書きしません。</p></section>
+
+<section class="panel"><h2 id="cloudTitle">オンライン連携</h2><div class="config-grid">
+<input id="supabaseUrl" type="url" placeholder="Supabase URL"><input id="supabaseKey" type="password" placeholder="Supabase Publishable Key">
+</div><div class="row"><button id="connectSupabase">Supabase接続</button><button id="cloudSync">データ同期</button><button id="export">バックアップ出力</button><label><button type="button" class="secondary" onclick="document.getElementById('restore').click()">バックアップ復元</button><input id="restore" type="file" accept=".json" hidden></label><button id="reset" class="danger">データリセット</button></div><p id="apiStatus">未接続。端末内保存はそのまま利用できます。</p></section>
+
+<section class="panel"><h2 id="socialTitle">交流・問い合わせ</h2><div class="tabs"><button data-tab="exchange">Sprite交換</button><button data-tab="chat">チャット</button><button data-tab="inquiry">問い合わせ</button></div>
+<div id="exchangeTab" class="tab-content"><div class="row"><select id="exchangeSprite"></select><select id="exchangeType"><option value="offer">譲ります</option><option value="want">探しています</option></select><button id="createExchange">募集を作成</button></div><div id="exchangeList" class="list"></div></div>
+<div id="chatTab" class="tab-content hidden"><div class="row"><input id="chatUser" placeholder="相手のユーザーID"><button id="openChat">チャットを開く</button></div><div id="chatBox" class="chat-box"></div><div class="row"><input id="chatMessage" placeholder="メッセージ"><button id="sendChat">送信</button></div></div>
+<div id="inquiryTab" class="tab-content hidden"><div class="row"><input id="inquirySubject" placeholder="問い合わせ件名"><button id="createInquiry">問い合わせを送る</button></div><div id="inquiryList" class="list"></div></div></section>
+
+<section class="panel hidden" id="adminPanel"><h2>管理者</h2><div class="admin-grid"><div><h3>ユーザー</h3><div id="userList" class="list"></div></div><div><h3>監査ログ</h3><div id="auditList" class="list"></div></div></div><div id="adminEditor" class="hidden"><h3 id="adminEditorTitle">ユーザーのSprite編集</h3><input id="adminUserId" type="hidden"><input id="adminSearch" placeholder="Spriteを検索"><div id="adminSpriteList" class="detect-list"></div></div><div><h3>問い合わせ管理</h3><div id="adminInquiryList" class="list"></div></div></section>
+
+<section class="panel"><h2 id="exportTitle">チェックリスト出力</h2><div class="row"><button id="exportChecklist">現在のチェックリストを画像保存</button><button id="requestNotification" class="secondary">ブラウザ通知を確認</button></div><p id="notificationStatus"></p></section>
+
 <main id="grid" class="grid"></main>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="./data/sprites.js"></script><script src="./app.js"></script>
 </body></html>
