@@ -778,3 +778,116 @@ end $$;
 --      body:='{"type":"scheduled","slot":"20:00 JST"}'::jsonb
 --   )$$
 -- );
+
+
+
+-- Final schema corrections and lifecycle triggers.
+alter table public.direct_messages
+  add column if not exists source_language text not null default '';
+
+create or replace function public.create_exchange_chat_after_accept()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_chat uuid;
+  v_owner uuid;
+begin
+  if new.status='accepted' and old.status is distinct from 'accepted' then
+    select owner_id into v_owner from public.exchange_posts where id=new.post_id;
+    if v_owner is null then return new; end if;
+
+    select id into v_chat from public.exchange_chats
+      where request_id=new.id limit 1;
+
+    if v_chat is null then
+      insert into public.exchange_chats(post_id,request_id,status)
+      values(new.post_id,new.id,'open')
+      returning id into v_chat;
+
+      insert into public.exchange_chat_members(chat_id,user_id,member_role)
+      values(v_chat,v_owner,'user')
+      on conflict do nothing;
+
+      insert into public.exchange_chat_members(chat_id,user_id,member_role)
+      values(v_chat,new.requester_id,'user')
+      on conflict do nothing;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists exchange_request_accepted_chat on public.exchange_requests;
+create trigger exchange_request_accepted_chat
+after update of status on public.exchange_requests
+for each row execute function public.create_exchange_chat_after_accept();
+
+revoke all on function public.create_exchange_chat_after_accept() from public;
+
+-- Superadmin-only role changes with mandatory reason and audit trail.
+create or replace function public.set_admin_role(
+  p_target uuid,
+  p_new_role text,
+  p_reason text default ''
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_old text;
+begin
+  if not public.is_superadmin() then raise exception 'Superadmin only'; end if;
+  if p_target=(select auth.uid()) then raise exception 'Cannot change own role'; end if;
+  if p_new_role not in ('user','admin') then raise exception 'Invalid target role'; end if;
+
+  select role into v_old from public.profiles where id=p_target;
+  if v_old is null then raise exception 'Target user not found'; end if;
+
+  update public.profiles set role=p_new_role where id=p_target;
+  insert into public.admin_role_changes(actor_id,target_user_id,old_role,new_role,reason)
+  values((select auth.uid()),p_target,v_old,p_new_role,coalesce(p_reason,''));
+
+  insert into public.audit_logs(actor_id,target_user_id,action,details)
+  values((select auth.uid()),p_target,'admin_role_change',
+    jsonb_build_object('old_role',v_old,'new_role',p_new_role,'reason',coalesce(p_reason,'')));
+
+  return true;
+end;
+$$;
+revoke all on function public.set_admin_role(uuid,text,text) from public;
+grant execute on function public.set_admin_role(uuid,text,text) to authenticated;
+
+-- User suspension is an admin support action; role hierarchy is unchanged.
+create or replace function public.set_account_suspension(
+  p_target uuid,
+  p_suspended boolean,
+  p_reason text default ''
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_admin() then raise exception 'Admin only'; end if;
+  insert into public.account_suspensions(user_id,suspended,reason,changed_by)
+  values(p_target,p_suspended,coalesce(p_reason,''),(select auth.uid()))
+  on conflict(user_id) do update set
+    suspended=excluded.suspended,reason=excluded.reason,
+    changed_by=excluded.changed_by,changed_at=now();
+
+  insert into public.audit_logs(actor_id,target_user_id,action,details)
+  values((select auth.uid()),p_target,'account_suspension',
+    jsonb_build_object('suspended',p_suspended,'reason',coalesce(p_reason,'')));
+  return true;
+end;
+$$;
+revoke all on function public.set_account_suspension(uuid,boolean,text) from public;
+grant execute on function public.set_account_suspension(uuid,boolean,text) to authenticated;
+
+grant select on public.direct_messages to authenticated;
+grant insert,update on public.direct_messages to authenticated;
