@@ -184,3 +184,23 @@ grant usage on schema public to anon, authenticated;
 grant select on public.profiles,public.sprite_state,public.exchange_posts,public.exchange_requests,public.direct_messages,public.inquiries,public.inquiry_messages,public.notifications,public.audit_logs to authenticated;
 grant insert,update,delete on public.sprite_state,public.exchange_posts,public.exchange_requests,public.direct_messages,public.inquiries,public.inquiry_messages,public.notifications,public.profiles to authenticated;
 grant insert on public.audit_logs to authenticated;
+
+
+-- System notification destination.
+-- This is a configuration value, not a public Web URL.
+create table if not exists public.app_settings (
+  key text primary key,
+  value text not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.app_settings enable row level security;
+drop policy if exists app_settings_read_admin on public.app_settings;
+create policy app_settings_read_admin on public.app_settings for select using (public.is_admin());
+drop policy if exists app_settings_write_superadmin on public.app_settings;
+create policy app_settings_write_superadmin on public.app_settings for all using (public.is_superadmin()) with check (public.is_superadmin());
+insert into public.app_settings(key,value)
+values ('admin_notification_email','mylife.reading6666@gmail.com')
+on conflict (key) do update set value=excluded.value,updated_at=now();
+
+grant select on public.app_settings to authenticated;
+grant insert,update,delete on public.app_settings to authenticated;
