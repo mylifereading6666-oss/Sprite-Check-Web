@@ -13,7 +13,7 @@
 <section class="page-section" id="accountPage"><section class="panel" id="authPanel"><h2 id="authTitle">アカウント</h2><div class="auth-grid">
 <input id="email" type="email" placeholder="メールアドレス"><input id="password" type="password" placeholder="パスワード">
 <input id="displayName" placeholder="表示名"><div class="row"><button id="signUp">新規登録</button><button id="signIn">ログイン</button><button id="signOut" class="secondary">ログアウト</button></div>
-</div><p id="authStatus">端末内モードで利用中です。オンライン機能を使う場合はSupabaseを設定してください。</p></section></section>
+</div><p id="authStatus">サーバーへ自動接続しています…</p></section></section>
 
 <section class="page-section active" id="spritesPage">
 <section class="stats"><div class="stat"><span id="ownedLabel">所持</span><b id="owned">0</b></div><div class="stat"><span id="masterLabel">Master</span><b id="master">0</b></div><div class="stat"><span id="rateLabel">達成率</span><b id="rate">0%</b></div></section>
@@ -33,9 +33,9 @@
 
 <section class="page-section" id="adminPage"><section class="panel hidden" id="adminPanel"><h2>管理者</h2><div class="admin-grid"><div><h3>ユーザー</h3><div id="userList" class="list"></div></div><div><h3>監査ログ</h3><div id="auditList" class="list"></div></div></div><div id="adminEditor" class="hidden"><h3 id="adminEditorTitle">ユーザーのSprite編集</h3><input id="adminUserId" type="hidden"><input id="adminSearch" placeholder="Spriteを検索"><div id="adminSpriteList" class="detect-list"></div></div><div><h3>問い合わせ管理</h3><div id="adminInquiryList" class="list"></div></div></section></section>
 
-<section class="page-section" id="settingsPage"><section class="panel"><h2 id="cloudTitle">オンライン連携</h2><div class="config-grid">
-<input id="supabaseUrl" type="url" placeholder="Supabase URL"><input id="supabaseKey" type="password" placeholder="Supabase Publishable Key">
-</div><div class="row"><button id="connectSupabase">Supabase接続</button><button id="cloudSync">データ同期</button><button id="export">バックアップ出力</button><label><button type="button" class="secondary" onclick="document.getElementById('restore').click()">バックアップ復元</button><input id="restore" type="file" accept=".json" hidden></label><button id="reset" class="danger">データリセット</button></div><p id="apiStatus">未接続。端末内保存はそのまま利用できます。</p></section>
+<section class="page-section" id="settingsPage"><section class="panel"><h2 id="cloudTitle">データ・バックアップ</h2>
+<div class="row"><button id="cloudSync">☁️ 今すぐ同期</button><button id="export">バックアップ出力</button><label><button type="button" class="secondary" onclick="document.getElementById('restore').click()">バックアップ復元</button><input id="restore" type="file" accept=".json" hidden></label><button id="reset" class="danger">データリセット</button></div>
+<p id="apiStatus">サーバーへ自動接続しています…</p></section>
 <section class="panel"><h2 id="exportTitle">チェックリスト出力</h2><div class="row"><button id="exportChecklist">現在のチェックリストを画像保存</button><button id="requestNotification" class="secondary">ブラウザ通知を確認</button></div><p id="notificationStatus"></p></section></section>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
