@@ -57,9 +57,17 @@ async function fetchTrustedUpcoming(){try{const res=await fetch(TRUSTED_UPDATES_
 async function syncSprites(force=false){
   const now=Date.now(),cached=localStorage.getItem(DATA_KEY),stamp=Number(localStorage.getItem(DATA_TIME_KEY)||0);
   if(!force&&cached&&now-stamp<REFRESH_MS){try{sprites=JSON.parse(cached);render();return{ok:true,count:sprites.length,time:stamp,source:"保存済みデータ"}}catch{}}
-  try{const res=await fetch(SOURCE+"?t="+now,{cache:"no-store"});if(!res.ok)throw new Error("HTTP "+res.status);const next=normalizeCatalog(await res.json());const trusted=await fetchTrustedUpcoming();const base=next.filter(x=>x.status!=="upcoming");const byId=new Map(base.map(x=>[x.id,x]));for(const x of trusted){if(!byId.has(x.id))byId.set(x.id,x)}const final=[...byId.values()];const changed=JSON.stringify(final)!==JSON.stringify(sprites);sprites=final;localStorage.setItem(DATA_KEY,JSON.stringify(sprites));localStorage.setItem(DATA_TIME_KEY,String(now));localStorage.setItem("sprite-check-last-source-v1",JSON.stringify({checked_at:now,primary:SOURCE,updates:TRUSTED_UPDATES_SOURCE,sprites:TRUSTED_SPRITES_SOURCE,count:sprites.length}));render();renderNews();if(changed)notifyNewSprites();return{ok:true,count:sprites.length,time:now,source:changed?"信頼済み公開データ（更新あり）":"信頼済み公開データ"}}catch(e){if(cached)try{sprites=JSON.parse(cached);render();return{ok:true,count:sprites.length,time:stamp,source:"保存済みデータ"}}catch{}return{ok:false,count:0,time:0,source:"取得失敗"}}}
+  try{const res=await fetch(SOURCE+"?t="+now,{cache:"no-store"});if(!res.ok)throw new Error("HTTP "+res.status);const next=normalizeCatalog(await res.json());const trusted=await fetchTrustedUpcoming();const base=next.filter(x=>x.status!=="upcoming");const byId=new Map(base.map(x=>[x.id,x]));for(const x of trusted){if(!byId.has(x.id))byId.set(x.id,x)}const final=[...byId.values()];const changed=JSON.stringify(final)!==JSON.stringify(sprites);sprites=final;localStorage.setItem(DATA_KEY,JSON.stringify(sprites));localStorage.setItem(DATA_TIME_KEY,String(now));localStorage.setItem("sprite-check-last-source-v1",JSON.stringify({checked_at:now,primary:SOURCE,updates:TRUSTED_UPDATES_SOURCE,sprites:TRUSTED_SPRITES_SOURCE,count:sprites.length}));render();renderNews();renderUserNotifications();if(changed)notifyNewSprites();return{ok:true,count:sprites.length,time:now,source:changed?"信頼済み公開データ（更新あり）":"信頼済み公開データ"}}catch(e){if(cached)try{sprites=JSON.parse(cached);render();return{ok:true,count:sprites.length,time:stamp,source:"保存済みデータ"}}catch{}return{ok:false,count:0,time:0,source:"取得失敗"}}}
 function setSyncStatus(info){const el=$("#syncStatus");if(!el)return;if(!info){el.textContent=t("Spriteデータを確認中…","Checking Sprite data…");return}el.innerHTML=info.ok?"✅ "+esc(info.source)+"<br><b>"+info.count+"件</b>を読み込み済み<br><small>最終確認: "+timeText(info.time)+"</small>":"⚠️ "+t("Spriteデータを取得できませんでした","Could not fetch Sprite data")}
 
+async function renderUserNotifications(){
+  const box=$("#userNotifications");if(!box)return;
+  if(!sb||!session){box.innerHTML="<p>"+t("ログインすると通知を受け取れます。","Sign in to receive notifications.")+"</p>";return}
+  const r=await sb.from("notifications").select("*").eq("user_id",session.user.id).order("created_at",{ascending:false}).limit(50);
+  if(r.error){box.textContent=r.error.message;return}
+  box.innerHTML=(r.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.title)+'</b><small>'+esc(x.body)+' · '+timeText(x.created_at)+(x.read?"":" · 未読")+'</small><button data-read="'+x.id+'">'+(x.read?"既読":"既読にする")+'</button></div>').join("")||"<p>通知はありません。</p>";
+  $$("[data-read]").forEach(b=>b.onclick=async()=>{await sb.from("notifications").update({read:true}).eq("id",b.dataset.read).eq("user_id",session.user.id);renderUserNotifications()});
+}
 function renderNews(){const box=$("#newsList");if(!box)return;const upcoming=sprites.filter(s=>s.status==="upcoming").slice(0,30);const released=sprites.filter(s=>s.isNew&&s.status==="released").slice(0,20);const source=localStorage.getItem("sprite-check-last-source-v1");let meta="";try{const m=JSON.parse(source||"{}");if(m.checked_at)meta="<small>最終確認: "+timeText(m.checked_at)+"</small>"}catch{}box.innerHTML=(released.length?'<div class="list-item"><b>🆕 新しく確認されたSprite</b><small>'+released.map(x=>esc(x.name)).join("、")+'</small></div>':"")+(upcoming.length?'<div class="list-item"><b>⏳ 登場予定</b><small>'+upcoming.map(x=>esc(x.name)+(x.releaseDate?" · "+esc(x.releaseDate):"")).join("、")+'</small></div>':"")+'<div class="list-item"><b>自動データ更新</b><small>機械可読カタログと信頼済み更新情報を定期確認します。'+meta+'</small></div>'}
 function render(){
   const q=($("#search")?.value||"").toLowerCase(),f=$("#filter")?.value||"all",season=$("#seasonFilter")?.value||"all";
@@ -71,7 +79,7 @@ function render(){
   const owned=sprites.filter(s=>item(s.id).owned).length,master=sprites.filter(s=>item(s.id).master).length;
   $("#owned").textContent=owned;$("#master").textContent=master;$("#rate").textContent=sprites.length?Math.round(owned/sprites.length*100)+"%":"0%";
   renderExchangeSprites();
-  renderNews();
+  renderNews();renderUserNotifications();
 }
 
 document.addEventListener("change",e=>{const id=e.target.dataset.id,k=e.target.dataset.k;if(id&&k){const x=item(id);x[k]=k==="level"?Math.max(1,Math.min(5,Number(e.target.value)||1)):e.target.checked;x.manual=true;x.updated_at=nowIso();save()}});
@@ -123,8 +131,8 @@ async function connectSupabase(){
     if(!window.supabase)throw new Error("Supabase client library is not loaded");
     sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
     const {data,error}=await sb.auth.getSession();if(error)throw error;session=data.session;
-    sb.auth.onAuthStateChange(async(_e,s)=>{session=s;await loadProfile();renderAuth();if(session)await cloudPullState();});
-    await loadProfile();setApiStatus(t("✅ Supabaseに接続しました。","✅ Connected to Supabase."));renderAuth();if(session)await cloudPullState();
+    sb.auth.onAuthStateChange(async(_e,s)=>{session=s;await loadProfile();renderAuth();renderNews();renderUserNotifications();if(session)await cloudPullState();});
+    await loadProfile();renderNews();renderUserNotifications();setApiStatus(t("✅ Supabaseに接続しました。","✅ Connected to Supabase."));renderAuth();if(session)await cloudPullState();
   }catch(e){sb=null;session=null;setApiStatus("⚠️ "+e.message)}
 }
 async function loadProfile(){profile=null;if(!sb||!session){renderAuth();return}const {data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).maybeSingle();if(error)throw error;if(data)profile=data;else{const name=$("#displayName").value.trim()||session.user.email.split("@")[0];const ins=await sb.from("profiles").insert({id:session.user.id,display_name:name,role:"user"}).select().single();if(!ins.error)profile=ins.data}renderAdmin()}
