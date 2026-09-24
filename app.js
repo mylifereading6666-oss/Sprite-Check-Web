@@ -2,6 +2,8 @@ const KEY="sprite-check-state-v2";
 const DATA_KEY="sprite-check-catalog-v2";
 const DATA_TIME_KEY="sprite-check-catalog-time-v2";
 const CONFIG_KEY="sprite-check-supabase-v1";
+const SUPERADMIN_EMAIL="mylife.reading6666@gmail.com";
+const ADMIN_NOTIFICATION_EMAIL=SUPERADMIN_EMAIL;
 const SOURCE="https://raw.githubusercontent.com/valincius/fn-sprites/main/src/sprites.json";
 const REFRESH_MS=5000;
 
@@ -72,7 +74,7 @@ function applyLanguage(){
 }
 function renderAuth(){
   const logged=!!session;$("#signUp").classList.toggle("hidden",logged);$("#signIn").classList.toggle("hidden",logged);$("#signOut").classList.toggle("hidden",!logged);
-  $("#authStatus").textContent=logged?t("ログイン中: "+(profile?.display_name||session.user.email),"Signed in: "+(profile?.display_name||session.user.email)):sb?t("Supabase接続済み・未ログイン","Supabase connected · not signed in"):t("端末内モードで利用中です","Using local device mode");
+  $("#authStatus").textContent=logged?t("ログイン中: "+(profile?.display_name||"ユーザー"),"Signed in: "+(profile?.display_name||"User")):sb?t("Supabase接続済み・未ログイン","Supabase connected · not signed in"):t("端末内モードで利用中です","Using local device mode");
   $("#adminPanel").classList.toggle("hidden",!(profile&&(profile.role==="admin"||profile.role==="superadmin")));
 }
 
@@ -88,7 +90,7 @@ function renderChecklistReview(r){const s4=sprites.filter(s=>s.season==="c7s4");
 $("#recognize").onclick=async()=>{if(!selectedFiles.length)return alert(t("先に画像を選択してください。","Select an image first."));const b=$("#recognize");b.disabled=true;try{const r=await checklistPixelDetect(selectedFiles[0]);recognitionResults=[r];renderChecklistReview(r);$("#ocrStatus").textContent=t("チェックリストを解析しました。候補を確認してください。","Checklist analyzed. Review the candidates before applying.")}catch(e){console.error(e);alert(t("画像を解析できませんでした。","Could not analyze the image."))}finally{b.disabled=false}};
 
 function notifyNewSprites(){const last=Number(localStorage.getItem("sprite-check-notify-count-v1")||0);if(sprites.length>last&&last>0&&typeof Notification!=="undefined"&&Notification.permission==="granted")new Notification("Sprite Check",{body:t("新しいSpriteデータが追加されました。","New Sprite data is available.")});localStorage.setItem("sprite-check-notify-count-v1",String(sprites.length))}
-$("#notifyNew").onclick=async()=>{if(!("Notification"in window))return alert(t("このブラウザは通知に対応していません。","This browser does not support notifications."));const p=await Notification.requestPermission();$("#notificationStatus").textContent=p==="granted"?t("通知を許可しました。","Notifications enabled."):t("通知は許可されませんでした。","Notifications were not enabled.")};
+$("#notifyNew").onclick=async()=>{if(!("Notification"in window))return alert(t("このブラウザは通知に対応していません。","This browser does not support notifications."));const p=await Notification.requestPermission();$("#notificationStatus").textContent=p==="granted"?t("通知を許可しました。","Notifications enabled."):t("通知は許可されませんでした。","Notifications were not enabled.");};
 $("#requestNotification").onclick=()=>$("#notifyNew").click();
 
 function loadConfig(){try{return JSON.parse(localStorage.getItem(CONFIG_KEY)||"{}")}catch{return{}}}
@@ -105,7 +107,7 @@ async function connectSupabase(){
     await loadProfile();setApiStatus(t("✅ Supabaseに接続しました。","✅ Connected to Supabase."));renderAuth();if(session)await cloudPullState();
   }catch(e){sb=null;session=null;setApiStatus("⚠️ "+e.message)}
 }
-async function loadProfile(){profile=null;if(!sb||!session){renderAuth();return}const {data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).maybeSingle();if(error)throw error;if(data)profile=data;else{const name=$("#displayName").value.trim()||session.user.email.split("@")[0];const ins=await sb.from("profiles").insert({id:session.user.id,display_name:name,role:"user"}).select().single();if(!ins.error)profile=ins.data}renderAdmin()}
+async function loadProfile(){profile=null;if(!sb||!session){renderAuth();return}const {data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).maybeSingle();if(error)throw error;if(data)profile=data;else{const name=$("#displayName").value.trim()||session.user.email.split("@")[0];const role=session.user.email.toLowerCase()===SUPERADMIN_EMAIL?"superadmin":"user";const ins=await sb.from("profiles").insert({id:session.user.id,display_name:name,role}).select().single();if(!ins.error)profile=ins.data}renderAdmin()}
 async function cloudPullState(){
   if(!sb||!session)return;
   const {data,error}=await sb.from("sprite_state").select("*").eq("user_id",session.user.id);if(error){setApiStatus("⚠️ "+error.message);return}
