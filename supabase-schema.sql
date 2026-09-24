@@ -124,9 +124,10 @@ drop policy if exists profiles_insert_self on public.profiles;
 create policy profiles_insert_self on public.profiles for insert with check (id=auth.uid() and role='user');
 
 drop policy if exists profiles_update_admin on public.profiles;
-create policy profiles_update_admin on public.profiles for update using (public.is_admin()) with check (
-  public.is_superadmin() or role = 'user'
-);
+drop policy if exists profiles_update_superadmin on public.profiles;
+drop policy if exists profiles_update_self_admin on public.profiles;
+create policy profiles_update_superadmin on public.profiles for update using (public.is_superadmin()) with check (true);
+create policy profiles_update_self_admin on public.profiles for update using (id=auth.uid() and role='admin') with check (id=auth.uid() and role='admin');
 
 drop policy if exists sprite_state_self on public.sprite_state;
 create policy sprite_state_self on public.sprite_state for all using (user_id=auth.uid() or public.is_admin()) with check (user_id=auth.uid() or public.is_admin());
