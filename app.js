@@ -130,8 +130,8 @@ async function connectSupabase(){
     if(!window.supabase)throw new Error("Supabase client library is not loaded");
     sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
     const {data,error}=await sb.auth.getSession();if(error)throw error;session=data.session;
-    sb.auth.onAuthStateChange(async(_e,s)=>{session=s;await loadProfile();renderAuth();renderNews();renderUserNotifications();if(session)await cloudPullState();});
-    await loadProfile();renderNews();renderUserNotifications();setApiStatus(t("✅ Supabaseに接続しました。","✅ Connected to Supabase."));renderAuth();if(session)await cloudPullState();
+    sb.auth.onAuthStateChange(async(_e,s)=>{session=s;await loadProfile();renderAuth();renderNews();renderUserNotifications();if(session)await cloudPullState();await renderAnnouncements();await autoAnnounceNewSprites();});
+    await loadProfile();renderNews();renderUserNotifications();renderAnnouncements();setApiStatus(t("✅ Supabaseに接続しました。","✅ Connected to Supabase."));renderAuth();if(session)await cloudPullState();
   }catch(e){sb=null;session=null;setApiStatus("⚠️ "+e.message)}
 }
 async function loadProfile(){profile=null;if(!sb||!session){renderAuth();return}const {data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).maybeSingle();if(error)throw error;if(data)profile=data;else{const name=$("#displayName").value.trim()||session.user.email.split("@")[0];const ins=await sb.from("profiles").insert({id:session.user.id,display_name:name,role:"user"}).select().single();if(!ins.error)profile=ins.data}renderAdmin()}
@@ -164,6 +164,50 @@ async function renderChat(){const box=$("#chatBox");if(!sb||!session){box.innerH
 $("#openChat").onclick=()=>{activeChatUser=$("#chatUser").value.trim();renderChat()};
 $("#sendChat").onclick=async()=>{if(!sb||!session||!activeChatUser)return;const body=$("#chatMessage").value.trim();if(!body)return;const {error}=await sb.from("direct_messages").insert({sender_id:session.user.id,recipient_id:activeChatUser,body});if(error)alert(error.message);else{$("#chatMessage").value="";renderChat()}};
 
+async function renderAnnouncements(){
+  const box=$("#announcementList");if(!box)return;
+  if(!sb||!session){box.innerHTML="<p>"+t("ログインするとお知らせを表示できます。","Sign in to view announcements.")+"</p>";return}
+  const r=await sb.from("announcements").select("*").order("created_at",{ascending:false}).limit(50);
+  if(r.error){box.textContent=r.error.message;return}
+  box.innerHTML=(r.data||[]).map(x=>'<article class="list-item"><b>'+esc(x.title)+'</b><small>'+esc(x.body)+'</small>'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="" style="max-width:100%;border-radius:10px;margin-top:8px">':"")+(x.source_url?'<small>出典: <a href="'+esc(x.source_url)+'" target="_blank" rel="noopener">'+esc(x.source_name||"参照元")+'</a></small>':"")+'<small>'+timeText(x.created_at)+(x.kind==="sprite_auto"?" · 自動検知":"")+'</small></article>').join("")||"<p>お知らせはありません。</p>";
+}
+async function renderAdminAnnouncements(){
+  const box=$("#adminAnnouncementList");if(!box||!sb||!profile)return;
+  const r=await sb.from("announcements").select("*").order("created_at",{ascending:false}).limit(50);
+  box.innerHTML=(r.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.title)+'</b><small>'+esc(x.body)+'</small><button data-ann-delete="'+x.id+'" class="danger">削除</button></div>').join("")||"<p>投稿なし</p>";
+  $$("[data-ann-delete]").forEach(b=>b.onclick=async()=>{if(confirm(t("このお知らせを削除しますか？","Delete this announcement?"))){await sb.from("announcements").delete().eq("id",b.dataset.annDelete);renderAnnouncements();renderAdminAnnouncements();}});
+}
+async function postAnnouncement(){
+  if(!sb||!session||!profile||!["admin","superadmin"].includes(profile.role))return;
+  const title=$("#adminAnnouncementTitle").value.trim(),body=$("#adminAnnouncementBody").value.trim(),image=$("#adminAnnouncementImage").value.trim(),source=$("#adminAnnouncementSource").value.trim();
+  if(!title||!body)return alert(t("タイトルと本文を入力してください。","Enter a title and body."));
+  const {error}=await sb.from("announcements").insert({author_id:session.user.id,title,body,image_url:image,source_url:source,source_name:source?"参照元":"",kind:"admin"});
+  if(error)return alert(error.message);
+  ["adminAnnouncementTitle","adminAnnouncementBody","adminAnnouncementImage","adminAnnouncementSource"].forEach(id=>{const e=$("#"+id);if(e)e.value=""});
+  await renderAnnouncements();await renderAdminAnnouncements();
+}
+async function autoAnnounceNewSprites(){
+  if(!sb||!session||!profile||!["admin","superadmin"].includes(profile.role))return;
+  const candidates=sprites.filter(x=>x.status==="released"&&x.isNew);
+  if(!candidates.length)return;
+  for(const x of candidates){
+    const sourceKey=x.id+"|"+(x.releaseDate||"");
+    const seen=await sb.from("sprite_source_seen").select("source_key").eq("source_key",sourceKey).maybeSingle();
+    if(seen.data)continue;
+    const {error}=await sb.from("announcements").insert({
+      author_id:session.user.id,
+      title:"🆕 新しい精霊が登場しました！",
+      body:x.name+" がFortniteに登場しました。Sprite Checkにも追加しました。",
+      image_url:x.imageUrl||"",
+      source_url:"https://spritechecklist.org/whats-new/",
+      source_name:"Sprite Checklist",
+      kind:"sprite_auto",
+      sprite_id:x.id
+    });
+    if(!error)await sb.from("sprite_source_seen").insert({source_key:sourceKey,sprite_id:x.id,source_url:"https://spritechecklist.org/whats-new/",source_name:"Sprite Checklist"});
+  }
+  await renderAnnouncements();
+}
 async function renderAdmin(){
   const ok=profile&&(profile.role==="admin"||profile.role==="superadmin");$("#adminPanel").classList.toggle("hidden",!ok);if(!ok||!sb)return;
   const heading=$("#adminPanel h2");if(heading)heading.textContent=profile.role==="superadmin"?"👑 最上位管理者":"🛡️ 管理者";
@@ -178,6 +222,7 @@ async function renderAdmin(){
   $("#auditList").innerHTML=(a.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.action)+'</b><small>'+esc(x.actor_id||"")+" → "+esc(x.target_user_id||"")+" · "+timeText(x.created_at)+'</small></div>').join("")||"<p>ログなし</p>";
   await renderAdminExchanges();
   await renderAdminInquiries();
+  await renderAdminAnnouncements();
 }
 async function changeUserRole(userId,role){
   if(!sb||!session||profile?.role!=="superadmin")return;
@@ -207,9 +252,10 @@ async function replyInquiry(id){
   const {error}=await sb.from("inquiry_messages").insert({inquiry_id:id,sender_id:session.user.id,body});
   if(error)alert(error.message);else{await sb.from("inquiries").update({status:"answered"}).eq("id",id);const q=await sb.from("inquiries").select("user_id,subject").eq("id",id).single();if(q.data)await sb.from("notifications").insert({user_id:q.data.user_id,title:"問い合わせへの回答",body});await sb.from("audit_logs").insert({actor_id:session.user.id,target_user_id:q.data?.user_id,action:"inquiry_reply",details:{inquiry_id:id}});renderAdminInquiries();}
 }
+$("#adminPostAnnouncement").onclick=postAnnouncement;
 $("#adminBroadcast").onclick=async()=>{
   if(!sb||!profile)return;
-  const title=$("#adminNoticeTitle").value.trim(),body=$("#adminNoticeBody").value.trim();if(!title||!body)return;
+  const title=$("#adminNoticeTitle").value.trim(),body=$("#adminNoticeBody").value.trim(),image=$("#adminNoticeImage")?.value.trim()||"";if(!title||!body)return;
   const users=await sb.from("profiles").select("id");if(users.error)return alert(users.error.message);
   const rows=(users.data||[]).map(u=>({user_id:u.id,title,body}));
   if(rows.length){const r=await sb.from("notifications").insert(rows);if(r.error)return alert(r.error.message);}
