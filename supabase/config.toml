@@ -1,5 +1,15 @@
 project_id = "qhogmxiyghashlxeuikm"
 
+# Edge Functions used by the Sprite Check web app.
+[functions.admin-code]
+verify_jwt = true
+
+[functions.admin-code-cron]
+verify_jwt = false
+
+[functions.admin-users]
+verify_jwt = true
+
 [functions.sprite-sync]
 verify_jwt = true
 
