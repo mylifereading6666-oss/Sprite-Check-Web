@@ -1,0 +1,10 @@
+project_id = "qhogmxiyghashlxeuikm"
+
+[functions.sprite-sync]
+verify_jwt = true
+
+[functions.sprite-sync-cron]
+verify_jwt = false
+
+[functions.translate-message]
+verify_jwt = true
