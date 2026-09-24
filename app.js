@@ -5,7 +5,7 @@ const CONFIG_KEY="sprite-check-supabase-v1";
 const SUPERADMIN_EMAIL="mylife.reading6666@gmail.com";
 const ADMIN_NOTIFICATION_EMAIL=SUPERADMIN_EMAIL;
 const SOURCE="https://raw.githubusercontent.com/valincius/fn-sprites/main/src/sprites.json";
-const REFRESH_MS=5000;
+const REFRESH_MS=30*60*1000;
 
 let state=JSON.parse(localStorage.getItem(KEY)||"{}");
 let lang=localStorage.getItem("sprite-lang")||"ja";
@@ -63,6 +63,16 @@ function render(){
 }
 
 document.addEventListener("change",e=>{const id=e.target.dataset.id,k=e.target.dataset.k;if(id&&k){const x=item(id);x[k]=k==="level"?Math.max(1,Math.min(5,Number(e.target.value)||1)):e.target.checked;x.manual=true;x.updated_at=nowIso();save()}});
+function openPage(name){
+  const page=name==="sprites"?"spritesPage":name==="recognition"?"recognitionPage":name==="news"?"newsPage":name==="social"?"socialPage":name==="admin"?"adminPage":name==="account"?"accountPage":"settingsPage";
+  $(".page-section").forEach(x=>{if(x.id!=="adminPanel")x.classList.remove("active")});
+  const target=$("#"+page);if(target)target.classList.add("active");
+  $("#sideMenu").classList.remove("open");$("#menuBackdrop").classList.add("hidden");
+  if(name==="admin"&&!profile)openPage("account");
+}
+$("#menuToggle").onclick=()=>{$("#sideMenu").classList.toggle("open");$("#menuBackdrop").classList.toggle("hidden",!$("#sideMenu").classList.contains("open"))};
+$("#menuBackdrop").onclick=()=>{$("#sideMenu").classList.remove("open");$("#menuBackdrop").classList.add("hidden")};
+$("[data-page]").forEach(b=>b.onclick=()=>openPage(b.dataset.page));
 $("#search").addEventListener("input",render);$("#filter").addEventListener("change",render);$("#seasonFilter").addEventListener("change",render);
 $("#theme").onclick=()=>{document.body.classList.toggle("dark");localStorage.setItem("sprite-theme",document.body.classList.contains("dark")?"dark":"light")};
 $("#lang").onclick=()=>{lang=lang==="ja"?"en":"ja";localStorage.setItem("sprite-lang",lang);applyLanguage();render();renderAuth();renderSocial()};
@@ -170,5 +180,7 @@ if(localStorage.getItem("sprite-theme")==="dark")document.body.classList.add("da
 const cfg=loadConfig();$("#supabaseUrl").value=cfg.url||"";$("#supabaseKey").value=cfg.key||"";
 $("#supabaseUrl").addEventListener("change",saveConfig);$("#supabaseKey").addEventListener("change",saveConfig);
 applyLanguage();renderAuth();render();renderExchangeSprites();setSyncStatus(null);syncSprites(true).then(setSyncStatus);
+if(cfg.url&&cfg.key)connectSupabase().catch(e=>setApiStatus("⚠️ "+e.message));
+openPage("sprites");
 setInterval(()=>syncSprites(true).then(setSyncStatus),REFRESH_MS);
 if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
