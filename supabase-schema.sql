@@ -231,3 +231,42 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function public.handle_new_user();
+
+
+-- Admin notification posts with optional image.
+create table if not exists public.announcements (
+  id uuid primary key default gen_random_uuid(),
+  author_id uuid not null references public.profiles(id) on delete cascade,
+  title text not null,
+  body text not null default '',
+  image_url text not null default '',
+  source_url text not null default '',
+  source_name text not null default '',
+  kind text not null default 'admin' check (kind in ('admin','sprite_auto')),
+  sprite_id text,
+  created_at timestamptz not null default now()
+);
+alter table public.announcements enable row level security;
+drop policy if exists announcements_read_authenticated on public.announcements;
+create policy announcements_read_authenticated on public.announcements for select using (auth.uid() is not null);
+drop policy if exists announcements_insert_admin on public.announcements;
+create policy announcements_insert_admin on public.announcements for insert with check (public.is_admin() and author_id=auth.uid());
+drop policy if exists announcements_update_admin on public.announcements;
+create policy announcements_update_admin on public.announcements for update using (public.is_admin());
+drop policy if exists announcements_delete_admin on public.announcements;
+create policy announcements_delete_admin on public.announcements for delete using (public.is_admin());
+grant select on public.announcements to authenticated;
+grant insert,update,delete on public.announcements to authenticated;
+
+-- Public read-only source snapshot for automatic Sprite announcements.
+create table if not exists public.sprite_source_seen (
+  source_key text primary key,
+  sprite_id text not null,
+  source_url text not null default '',
+  source_name text not null default '',
+  first_seen_at timestamptz not null default now()
+);
+alter table public.sprite_source_seen enable row level security;
+drop policy if exists sprite_source_seen_admin on public.sprite_source_seen;
+create policy sprite_source_seen_admin on public.sprite_source_seen for all using (public.is_admin()) with check (public.is_admin());
+grant select,insert,update,delete on public.sprite_source_seen to authenticated;
