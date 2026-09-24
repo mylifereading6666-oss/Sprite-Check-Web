@@ -21,7 +21,7 @@ function normalizeStatus(v:unknown):"released"|"upcoming"|"unconfirmed" {
   const s=String(v??"").toLowerCase();
   if(s.includes("upcoming")||s.includes("future")||s.includes("soon")) return "upcoming";
   if(s.includes("release")||s==="live"||s==="released") return "released";
-  return "unconfirmed";
+  return "released";
 }
 
 function parse(rows:RemoteRow[]):Canonical[] {
