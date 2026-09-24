@@ -55,3 +55,6 @@ input,select{padding:9px;border:1px solid #d1d5db;border-radius:10px;background:
  .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
  .card{padding:9px}.detect-row{align-items:flex-start;flex-wrap:wrap}
 }
+
+.brand{display:flex;align-items:center;gap:10px}.menu-btn{font-size:22px;padding:7px 11px}.side-menu{position:fixed;top:0;left:0;width:270px;height:100vh;background:white;z-index:1000;padding:80px 16px 20px;box-shadow:4px 0 20px #0003;transform:translateX(-110%);transition:transform .2s;display:flex;flex-direction:column;gap:8px}.side-menu.open{transform:translateX(0)}.side-menu button{text-align:left;width:100%;padding:12px 14px}.menu-backdrop{position:fixed;inset:0;background:#0007;z-index:999}.dark .side-menu{background:#1e293b}.page-section{display:none}.page-section.active{display:block}
+@media(max-width:700px){.side-menu{width:82vw;max-width:310px}}
