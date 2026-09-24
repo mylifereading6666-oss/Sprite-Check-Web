@@ -12,13 +12,13 @@
 
 <section class="page-section" id="accountPage"><section class="panel" id="authPanel"><h2 id="authTitle">アカウント</h2><div class="auth-grid">
 <input id="email" type="email" placeholder="メールアドレス"><input id="password" type="password" placeholder="パスワード">
-<input id="displayName" placeholder="表示名"><div class="row"><button id="signUp">新規登録</button><button id="signIn">ログイン</button><button id="signOut" class="secondary">ログアウト</button></div>
+<input id="displayName" placeholder="表示名"><div class="row"><button id="signUp">新規登録</button><button id="signIn">ログイン</button><button id="signOut" class="secondary">ログアウト</button><button id="resetPassword" class="secondary">パスワード再設定</button></div>
 </div><p id="authStatus">サーバーへ自動接続しています…</p></section></section>
 
 <section class="page-section active" id="spritesPage">
-<section class="stats"><div class="stat"><span id="ownedLabel">所持</span><b id="owned">0</b></div><div class="stat"><span id="masterLabel">Master</span><b id="master">0</b></div><div class="stat"><span id="rateLabel">達成率</span><b id="rate">0%</b></div></section>
+<section class="stats"><div class="stat"><span id="ownedLabel">所持</span><b id="owned">0</b></div><div class="stat"><span id="masterLabel">Master</span><b id="master">0</b></div><div class="stat"><span id="totalLabel">登場済みSprite</span><b id="totalSprites">0</b></div><div class="stat"><span id="rateLabel">達成率</span><b id="rate">0%</b></div></section>
 <section class="panel"><div class="toolbar"><input id="search" placeholder="Spriteを検索"><select id="seasonFilter"><option value="all">全シーズン</option><option value="c7s4">Chapter 7 Season 4</option><option value="c7s3">Chapter 7 Season 3</option></select><select id="filter"><option value="all">すべて</option><option value="owned">所持</option><option value="unowned">未所持</option><option value="master">Master</option><option value="upcoming">近日登場</option><option value="new">新着</option></select></div></section>
-<section class="panel"><div class="row"><button id="sync">Spriteデータ更新</button><span id="syncStatus">自動更新対象を確認中…</span></div><p id="syncHelp">新しいSpriteが公開データに追加されると一覧へ反映します。</p></section>
+<section class="panel"><div class="row"><button id="sync">サーバーから再読み込み</button><button id="superadminSpriteSync" class="danger hidden">👑 Spriteを今すぐ更新</button><span id="syncStatus">自動更新対象を確認中…</span></div><p id="syncHelp">Spriteデータはサーバー側で08:00・13:00・20:00 JSTに自動確認します。最上位管理者だけ即時更新を実行できます。</p></section>
 <main id="grid" class="grid"></main>
 </section>
 
@@ -29,7 +29,7 @@
 
 <section class="page-section" id="socialPage"><section class="panel"><h2 id="socialTitle">交流・問い合わせ</h2><div class="tabs"><button data-tab="exchange">Sprite交換</button><button data-tab="chat">チャット</button><button data-tab="inquiry">問い合わせ</button></div>
 <div id="exchangeTab" class="tab-content"><div class="row"><select id="exchangeSprite"></select><select id="exchangeType"><option value="offer">譲ります</option><option value="want">探しています</option></select><button id="createExchange">募集を作成</button></div><div id="exchangeList" class="list"></div></div>
-<div id="chatTab" class="tab-content hidden"><div class="row"><input id="chatUser" placeholder="相手のユーザーID"><button id="openChat">チャットを開く</button></div><div id="chatBox" class="chat-box"></div><div class="row"><input id="chatMessage" placeholder="メッセージ"><button id="sendChat">送信</button></div></div>
+<div id="chatTab" class="tab-content hidden"><div class="row"><input id="chatUser" placeholder="相手のユーザーID"><button id="openChat">チャットを開く</button></div><div id="chatBox" class="chat-box"></div><div class="row"><input id="chatMessage" placeholder="メッセージ"><button id="sendChat">送信</button></div><small>各メッセージの「翻訳」で日本語⇄Englishを切り替えます。原文は変更せず保存します。</small></div>
 <div id="inquiryTab" class="tab-content hidden"><div class="row"><input id="inquirySubject" placeholder="問い合わせ件名"><button id="createInquiry">問い合わせを送る</button></div><div id="inquiryList" class="list"></div></div></section></section>
 
 <section class="page-section" id="adminPage"><section class="panel hidden" id="adminPanel"><h2>管理者</h2>
@@ -39,17 +39,20 @@
 </div>
 <div class="panel admin-tools">
 <h3>📢 通知</h3><div class="row"><input id="adminNoticeTitle" placeholder="通知タイトル"><input id="adminNoticeBody" placeholder="通知内容" style="flex:1"><input id="adminNoticeImage" type="url" placeholder="画像URL（任意）"><button id="adminBroadcast">全ユーザーへ通知</button></div>
-<div class="row"><input id="adminAnnouncementTitle" placeholder="お知らせタイトル"><input id="adminAnnouncementBody" placeholder="本文" style="flex:1"><input id="adminAnnouncementImage" type="url" placeholder="画像URL（任意）"><input id="adminAnnouncementSource" type="url" placeholder="出典URL（任意）"><button id="adminPostAnnouncement">お知らせを投稿</button></div>
+<div class="row"><input id="adminAnnouncementTitle" placeholder="お知らせタイトル"><input id="adminAnnouncementTitleEn" placeholder="English title"><input id="adminAnnouncementBody" placeholder="本文" style="flex:1"><input id="adminAnnouncementBodyEn" placeholder="English body" style="flex:1"><input id="adminAnnouncementImage" type="url" placeholder="画像URL（任意）"><input id="adminAnnouncementFile" type="file" accept="image/*"><input id="adminAnnouncementSource" type="url" placeholder="出典URL（任意）"><button id="adminPostAnnouncement">お知らせを投稿</button></div>
 <div id="adminAnnouncementList" class="list"></div>
 </div>
 <div class="panel admin-tools"><h3>🤝 交換管理</h3><div id="adminExchangeList" class="list"></div></div>
 <div class="panel admin-tools"><h3>💬 問い合わせ管理</h3><div id="adminInquiryList" class="list"></div></div>
+<div class="panel admin-tools"><h3>🛡️ 管理者登録</h3><div class="row"><input id="adminRegistrationCode" placeholder="週間管理者登録コード"><button id="registerAdmin">管理者として登録</button></div><small>コードはサーバー側で管理され、完成版ではアプリ本体に埋め込みません。</small></div>
+<div id="superadminTools" class="panel admin-tools hidden"><h3>👑 最上位管理者設定</h3><div class="row"><button id="generateAdminCode">今週の管理者登録コードを生成</button><button id="adminRoleHistory">管理者権限履歴</button></div><div id="adminRoleHistoryList" class="list"></div></div>
 <div id="adminEditor" class="hidden"><h3 id="adminEditorTitle">ユーザーのSprite編集</h3><input id="adminUserId" type="hidden"><input id="adminSearch" placeholder="Spriteを検索"><div id="adminSpriteList" class="detect-list"></div></div>
 </section></section>
 
 <section class="page-section" id="settingsPage"><section class="panel"><h2 id="cloudTitle">データ・バックアップ</h2>
 <div class="row"><button id="cloudSync">☁️ 今すぐ同期</button><button id="export">バックアップ出力</button><label><button type="button" class="secondary" onclick="document.getElementById('restore').click()">バックアップ復元</button><input id="restore" type="file" accept=".json" hidden></label><button id="reset" class="danger">データリセット</button></div>
 <p id="apiStatus">サーバーへ自動接続しています…</p></section>
+<section class="panel"><h2>🌐 Language / 言語</h2><div class="row"><button id="langJa">🇯🇵 日本語</button><button id="langEn">🇺🇸 English</button></div><label><input id="autoTranslate" type="checkbox"> チャット自動翻訳 / Auto-translate chats</label></section>
 <section class="panel"><h2 id="exportTitle">チェックリスト出力</h2><div class="row"><button id="exportChecklist">現在のチェックリストを画像保存</button><button id="requestNotification" class="secondary">ブラウザ通知を確認</button></div><p id="notificationStatus"></p></section></section>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
