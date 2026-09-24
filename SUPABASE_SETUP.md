@@ -10,7 +10,7 @@ Supabase DashboardのSQL Editorで、このリポジトリの `supabase-schema.s
 
 ## 3. 最初の管理者を設定
 Sprite Checkで最初のユーザーを登録したあと、Supabase DashboardのTable Editorで `profiles` のそのユーザーの `role` を `superadmin` に変更します。
-以後、管理者機能はRLSで保護されます。
+以後、管理者機能はRLSで保護されます。登録時に最上位管理者のメールアドレスと一致したユーザーは `superadmin` として初期登録されます。通知関連の管理者宛先もSQL設定に登録されます。
 
 ## 4. Web版へ接続
 Sprite Checkの「オンライン連携」に、SupabaseのProject URLとPublishable Keyを入力して「Supabase接続」を押します。
@@ -50,3 +50,12 @@ Publishable/anonキーをWebに置く方式では、データ保護はRLSが前�
 
 ブラウザだけで完全なバックグラウンドPushやクライアント改ざん防止を保証することはできません。
 この構成では、重要な権限・データ保護はSupabase Auth + RLSでサーバー側に置き、Web側は公開用のPublishable Keyだけを使用します。
+
+
+## 管理者・通知先
+
+最上位管理者: mylife.reading6666@gmail.com
+
+管理者向け通知の設定先も同じアドレスです。Webページ上の公開リンクや画面URLにはメールアドレスを含めない設計です。
+
+なお、Supabaseから実際にメールを自動送信する場合は、Supabase Dashboard側のメール/SMTP設定または利用する通知サービスの設定が別途必要です。Web側へ管理者の秘密鍵やservice_roleキーを埋め込むことはしません。
