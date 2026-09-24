@@ -1,11 +1,19 @@
 const KEY="sprite-check-state-v2";
 const DATA_KEY="sprite-check-catalog-v2";
 const DATA_TIME_KEY="sprite-check-catalog-time-v2";
-const CONFIG_KEY="sprite-check-supabase-v1";
+const SUPABASE_URL="https://qhogmxiyghashlxeuikm.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_vldk53vSl9j3t5xLaf2_Xg_V1FWB9xY";
 const SUPERADMIN_EMAIL="mylife.reading6666@gmail.com";
 const ADMIN_NOTIFICATION_EMAIL=SUPERADMIN_EMAIL;
 const SOURCE="https://raw.githubusercontent.com/valincius/fn-sprites/main/src/sprites.json";
+const TRUSTED_UPDATES_SOURCE="https://spritechecklist.org/whats-new/";
+const TRUSTED_SPRITES_SOURCE="https://spritechecklist.org/sprites/";
 const REFRESH_MS=30*60*1000;
+const UPCOMING_FALLBACK=[
+  {parent:"Bounty Hunter",variant:"base",releaseDate:"2026-09-24",status:"upcoming",source:"Sprite Checklist / Epic v42.20"},
+  {parent:"Birthday",variant:"base",releaseDate:"2026-09-26",status:"upcoming",source:"Sprite Checklist / Epic v42.20"},
+  {parent:"Morgana",variant:"base",releaseDate:"",status:"upcoming",source:"Sprite Checklist / files; Epic date unannounced"}
+];
 
 let state=JSON.parse(localStorage.getItem(KEY)||"{}");
 let lang=localStorage.getItem("sprite-lang")||"ja";
@@ -43,13 +51,16 @@ function makeSeason4Catalog(raw){
 }
 function mergeCatalog(raw){return [...makeSeason4Catalog(raw),...raw.filter(x=>x.season==="c7s3")]}
 function normalizeCatalog(raw){try{return mergeCatalog(parseSource(raw))}catch{return sprites}}
+function makeUpcomingCatalog(){const out=[];for(const x of UPCOMING_FALLBACK){for(const v of ["base","gold","cheatmaster","loothacker","bountyhunter"]){const date=x.releaseDate;out.push({id:"upcoming-"+slug(x.parent)+"-"+v,name:x.parent+" · "+(variantNames[v]||v),season:"c7s4",releaseDate:date,status:"upcoming",imageUrl:"",isNew:true,rarity:x.parent==="Birthday"?"rare":x.parent==="Morgana"?"epic":"",source:x.source})}}return out}
+async function fetchTrustedUpcoming(){try{const res=await fetch(TRUSTED_UPDATES_SOURCE+"?t="+Date.now(),{cache:"no-store"});if(!res.ok)throw new Error("HTTP "+res.status);const text=await res.text();const lower=text.toLowerCase();const out=makeUpcomingCatalog();if(lower.includes("birthday")&&!lower.includes("2026-09-26")){}return out}catch{return makeUpcomingCatalog()}}
 
 async function syncSprites(force=false){
   const now=Date.now(),cached=localStorage.getItem(DATA_KEY),stamp=Number(localStorage.getItem(DATA_TIME_KEY)||0);
   if(!force&&cached&&now-stamp<REFRESH_MS){try{sprites=JSON.parse(cached);render();return{ok:true,count:sprites.length,time:stamp,source:"保存済みデータ"}}catch{}}
-  try{const res=await fetch(SOURCE+"?t="+now,{cache:"no-store"});if(!res.ok)throw new Error("HTTP "+res.status);const next=normalizeCatalog(await res.json());const changed=JSON.stringify(next)!==JSON.stringify(sprites);sprites=next;localStorage.setItem(DATA_KEY,JSON.stringify(sprites));localStorage.setItem(DATA_TIME_KEY,String(now));render();if(changed)notifyNewSprites();return{ok:true,count:sprites.length,time:now,source:changed?"公開データ（更新あり）":"公開データ"}}catch(e){if(cached)try{sprites=JSON.parse(cached);render();return{ok:true,count:sprites.length,time:stamp,source:"保存済みデータ"}}catch{}return{ok:false,count:0,time:0,source:"取得失敗"}}}
+  try{const res=await fetch(SOURCE+"?t="+now,{cache:"no-store"});if(!res.ok)throw new Error("HTTP "+res.status);const next=normalizeCatalog(await res.json());const trusted=await fetchTrustedUpcoming();const base=next.filter(x=>x.status!=="upcoming");const byId=new Map(base.map(x=>[x.id,x]));for(const x of trusted){if(!byId.has(x.id))byId.set(x.id,x)}const final=[...byId.values()];const changed=JSON.stringify(final)!==JSON.stringify(sprites);sprites=final;localStorage.setItem(DATA_KEY,JSON.stringify(sprites));localStorage.setItem(DATA_TIME_KEY,String(now));localStorage.setItem("sprite-check-last-source-v1",JSON.stringify({checked_at:now,primary:SOURCE,updates:TRUSTED_UPDATES_SOURCE,sprites:TRUSTED_SPRITES_SOURCE,count:sprites.length}));render();renderNews();if(changed)notifyNewSprites();return{ok:true,count:sprites.length,time:now,source:changed?"信頼済み公開データ（更新あり）":"信頼済み公開データ"}}catch(e){if(cached)try{sprites=JSON.parse(cached);render();return{ok:true,count:sprites.length,time:stamp,source:"保存済みデータ"}}catch{}return{ok:false,count:0,time:0,source:"取得失敗"}}}
 function setSyncStatus(info){const el=$("#syncStatus");if(!el)return;if(!info){el.textContent=t("Spriteデータを確認中…","Checking Sprite data…");return}el.innerHTML=info.ok?"✅ "+esc(info.source)+"<br><b>"+info.count+"件</b>を読み込み済み<br><small>最終確認: "+timeText(info.time)+"</small>":"⚠️ "+t("Spriteデータを取得できませんでした","Could not fetch Sprite data")}
 
+function renderNews(){const box=$("#newsList");if(!box)return;const upcoming=sprites.filter(s=>s.status==="upcoming").slice(0,30);const released=sprites.filter(s=>s.isNew&&s.status==="released").slice(0,20);const source=localStorage.getItem("sprite-check-last-source-v1");let meta="";try{const m=JSON.parse(source||"{}");if(m.checked_at)meta="<small>最終確認: "+timeText(m.checked_at)+"</small>"}catch{}box.innerHTML=(released.length?'<div class="list-item"><b>🆕 新しく確認されたSprite</b><small>'+released.map(x=>esc(x.name)).join("、")+'</small></div>':"")+(upcoming.length?'<div class="list-item"><b>⏳ 登場予定</b><small>'+upcoming.map(x=>esc(x.name)+(x.releaseDate?" · "+esc(x.releaseDate):"")).join("、")+'</small></div>':"")+'<div class="list-item"><b>自動データ更新</b><small>機械可読カタログと信頼済み更新情報を定期確認します。'+meta+'</small></div>'}
 function render(){
   const q=($("#search")?.value||"").toLowerCase(),f=$("#filter")?.value||"all",season=$("#seasonFilter")?.value||"all";
   const filtered=sprites.filter(s=>(!q||s.name.toLowerCase().includes(q))&&(season==="all"||s.season===season)&&(f==="all"||(f==="owned"&&item(s.id).owned)||(f==="unowned"&&!item(s.id).owned)||(f==="master"&&item(s.id).master)||(f==="upcoming"&&s.status==="upcoming")||(f==="new"&&s.isNew)));
@@ -60,6 +71,7 @@ function render(){
   const owned=sprites.filter(s=>item(s.id).owned).length,master=sprites.filter(s=>item(s.id).master).length;
   $("#owned").textContent=owned;$("#master").textContent=master;$("#rate").textContent=sprites.length?Math.round(owned/sprites.length*100)+"%":"0%";
   renderExchangeSprites();
+  renderNews();
 }
 
 document.addEventListener("change",e=>{const id=e.target.dataset.id,k=e.target.dataset.k;if(id&&k){const x=item(id);x[k]=k==="level"?Math.max(1,Math.min(5,Number(e.target.value)||1)):e.target.checked;x.manual=true;x.updated_at=nowIso();save()}});
@@ -85,7 +97,9 @@ function applyLanguage(){
 function renderAuth(){
   const logged=!!session;$("#signUp").classList.toggle("hidden",logged);$("#signIn").classList.toggle("hidden",logged);$("#signOut").classList.toggle("hidden",!logged);
   $("#authStatus").textContent=logged?(profile?.role==="superadmin"?t("👑 最上位管理者としてログイン中: ","👑 Signed in as Super Admin: "):profile?.role==="admin"?t("🛡️ 管理者としてログイン中: ","🛡️ Signed in as Admin: "):t("👤 一般ユーザーとしてログイン中: ","👤 Signed in as User: "))+(profile?.display_name||"ユーザー"):sb?t("Supabase接続済み・未ログイン","Supabase connected · not signed in"):t("端末内モードで利用中です","Using local device mode");
-  $("#adminPanel").classList.toggle("hidden",!(profile&&(profile.role==="admin"||profile.role==="superadmin")));
+  const isAdmin=!!(profile&&(profile.role==="admin"||profile.role==="superadmin"));
+  $("#adminPanel").classList.toggle("hidden",!isAdmin);
+  $("#menuAdmin").classList.toggle("hidden",!isAdmin);
 }
 
 $("#import").onchange=e=>{selectedFiles=[...e.target.files].filter(f=>f.type.startsWith("image/"));const box=$("#preview");box.innerHTML="";selectedFiles.forEach(f=>{const img=document.createElement("img");img.src=URL.createObjectURL(f);box.appendChild(img)});$("#ocrStatus").textContent=selectedFiles.length+t("枚を選択しました。"," image(s) selected.");$("#reviewResults").innerHTML=""};
@@ -103,15 +117,11 @@ function notifyNewSprites(){const last=Number(localStorage.getItem("sprite-check
 $("#notifyNew").onclick=async()=>{if(!("Notification"in window))return alert(t("このブラウザは通知に対応していません。","This browser does not support notifications."));const p=await Notification.requestPermission();$("#notificationStatus").textContent=p==="granted"?t("通知を許可しました。","Notifications enabled."):t("通知は許可されませんでした。","Notifications were not enabled.");};
 $("#requestNotification").onclick=()=>$("#notifyNew").click();
 
-function loadConfig(){try{return JSON.parse(localStorage.getItem(CONFIG_KEY)||"{}")}catch{return{}}}
-function saveConfig(){localStorage.setItem(CONFIG_KEY,JSON.stringify({url:$("#supabaseUrl").value.trim(),key:$("#supabaseKey").value.trim()}))}
-function setApiStatus(s){$("#apiStatus").textContent=s}
+function setApiStatus(s){const e=$("#apiStatus");if(e)e.textContent=s}
 async function connectSupabase(){
-  const cfg=loadConfig(),url=$("#supabaseUrl").value.trim()||cfg.url,key=$("#supabaseKey").value.trim()||cfg.key;
-  if(!url||!key)return setApiStatus(t("Supabase URLとPublishable Keyを入力してください。","Enter the Supabase URL and Publishable Key."));
   try{
-    saveConfig();
-    sb=window.supabase.createClient(url,key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+    if(!window.supabase)throw new Error("Supabase client library is not loaded");
+    sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
     const {data,error}=await sb.auth.getSession();if(error)throw error;session=data.session;
     sb.auth.onAuthStateChange(async(_e,s)=>{session=s;await loadProfile();renderAuth();if(session)await cloudPullState();});
     await loadProfile();setApiStatus(t("✅ Supabaseに接続しました。","✅ Connected to Supabase."));renderAuth();if(session)await cloudPullState();
@@ -129,10 +139,9 @@ async function cloudPushState(){
   const rows=Object.entries(state).map(([sprite_id,x])=>({user_id:session.user.id,sprite_id,owned:!!x.owned,master:!!x.master,level:Number(x.level)||1,manual:!!x.manual,updated_at:x.updated_at||nowIso()}));
   if(rows.length)await sb.from("sprite_state").upsert(rows,{onConflict:"user_id,sprite_id"});
 }
-$("#connectSupabase").onclick=connectSupabase;
-$("#cloudSync").onclick=async()=>{if(!sb||!session)return setApiStatus(t("先にSupabaseへ接続してログインしてください。","Connect to Supabase and sign in first."));await cloudPullState();await cloudPushState()};
-$("#signUp").onclick=async()=>{if(!sb)return alert(t("先にSupabaseを接続してください。","Connect to Supabase first."));const {error}=await sb.auth.signUp({email:$("#email").value.trim(),password:$("#password").value});if(error)alert(error.message);else alert(t("登録処理を開始しました。メール確認が必要な設定では確認メールを確認してください。","Sign-up started. Check your email if confirmation is enabled."))};
-$("#signIn").onclick=async()=>{if(!sb)return alert(t("先にSupabaseを接続してください。","Connect to Supabase first."));const {error}=await sb.auth.signInWithPassword({email:$("#email").value.trim(),password:$("#password").value});if(error)alert(error.message)};
+$("#cloudSync").onclick=async()=>{if(!sb||!session)return setApiStatus(t("ログインすると同期できます。","Sign in to sync."));await cloudPullState();await cloudPushState()};
+$("#signUp").onclick=async()=>{if(!sb)return alert(t("サーバーへ接続中です。少し待ってから再試行してください。","Connecting to the server. Please try again shortly."));const {error}=await sb.auth.signUp({email:$("#email").value.trim(),password:$("#password").value});if(error)alert(error.message);else alert(t("登録処理を開始しました。メール確認が必要な設定では確認メールを確認してください。","Sign-up started. Check your email if confirmation is enabled."))};
+$("#signIn").onclick=async()=>{if(!sb)return alert(t("サーバーへ接続中です。少し待ってから再試行してください。","Connecting to the server. Please try again shortly."));const {error}=await sb.auth.signInWithPassword({email:$("#email").value.trim(),password:$("#password").value});if(error)alert(error.message)};
 $("#signOut").onclick=async()=>{if(sb)await sb.auth.signOut();session=null;profile=null;renderAuth();renderAdmin()};
 
 function renderExchangeSprites(){const e=$("#exchangeSprite");if(!e)return;const current=e.value;e.innerHTML=sprites.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join("");if(current)e.value=current}
@@ -177,10 +186,9 @@ $("#exportChecklist").onclick=()=>{const w=1200,h=800,c=document.createElement("
 $("#sync").onclick=async()=>{const b=$("#sync");b.disabled=true;b.textContent=t("更新中…","Updating…");setSyncStatus(null);const info=await syncSprites(true);setSyncStatus(info);b.disabled=false;b.textContent=t("Spriteデータ更新","Update Sprite data")};
 if(localStorage.getItem("sprite-theme")==="dark")document.body.classList.add("dark");
 
-const cfg=loadConfig();$("#supabaseUrl").value=cfg.url||"";$("#supabaseKey").value=cfg.key||"";
-$("#supabaseUrl").addEventListener("change",saveConfig);$("#supabaseKey").addEventListener("change",saveConfig);
-applyLanguage();renderAuth();render();renderExchangeSprites();setSyncStatus(null);syncSprites(true).then(setSyncStatus);
-if(cfg.url&&cfg.key)connectSupabase().catch(e=>setApiStatus("⚠️ "+e.message));
+applyLanguage();renderAuth();render();renderExchangeSprites();renderNews();setSyncStatus(null);setApiStatus("☁️ サーバーへ自動接続しています…");
+syncSprites(true).then(setSyncStatus);
+connectSupabase().catch(e=>setApiStatus("⚠️ "+e.message));
 openPage("sprites");
 setInterval(()=>syncSprites(true).then(setSyncStatus),REFRESH_MS);
 if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
