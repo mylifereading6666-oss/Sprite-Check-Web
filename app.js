@@ -2,7 +2,7 @@ const KEY="sprite-check-state-v1";
 const DATA_KEY="sprite-check-catalog-v1";
 const DATA_TIME_KEY="sprite-check-catalog-time-v1";
 const SOURCE="https://raw.githubusercontent.com/valincius/fn-sprites/main/src/sprites.json";
-const REFRESH_MS=12*60*60*1000;
+const REFRESH_MS=5000;
 let state=JSON.parse(localStorage.getItem(KEY)||"{}");
 let lang=localStorage.getItem("sprite-lang")||"ja";
 let sprites=Array.isArray(window.SPRITES)?window.SPRITES:[];
@@ -13,30 +13,18 @@ function item(id){return state[id]||(state[id]={owned:false,master:false,level:1
 const variantNames={base:"Normal",normal:"Normal",gold:"Gold",candy:"Gummy",gummy:"Gummy",galaxy:"Galaxy",gem:"Gem",holofoil:"Holofoil",cube:"Cube",quack:"Quack",cheatmaster:"Cheat Master",loothacker:"Loot Hacker",bountyhunter:"Bounty Hunter"};
 function parseSource(rows){
   if(!Array.isArray(rows)||!rows.length) throw new Error("catalog empty");
-  return rows.filter(x=>x&&x.parent&&x.url).map(x=>({
-    id:"fn-"+String(x.spriteId)+"-"+String(x.variant||"base"),
-    name:String(x.parent)+" · "+(variantNames[x.variant]||String(x.variant||"Normal")),
-    season:x.season||"",
-    releaseDate:"",
-    status:"released",
-    imageUrl:x.url,
-    isNew:false,
-    rarity:x.rarity||"",
-    source:"FN Sprite catalog"
-  }));
+  return rows.filter(x=>x&&x.parent&&x.url).map(x=>({id:"fn-"+String(x.spriteId)+"-"+String(x.variant||"base"),name:String(x.parent)+" · "+(variantNames[x.variant]||String(x.variant||"Normal")),season:x.season||"",releaseDate:"",status:"released",imageUrl:x.url,isNew:false,rarity:x.rarity||"",source:"FN Sprite catalog"}));
 }
-function timeText(t){return new Intl.DateTimeFormat("ja-JP",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date(t))}
+function timeText(t){return new Intl.DateTimeFormat("ja-JP",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(new Date(t))}
 async function syncSprites(force=false){
   const now=Date.now(),cached=localStorage.getItem(DATA_KEY),stamp=Number(localStorage.getItem(DATA_TIME_KEY)||0);
-  if(!force&&cached&&now-stamp<REFRESH_MS){
-    try{sprites=JSON.parse(cached);render();return{ok:true,count:sprites.length,time:stamp,source:"保存済みデータ"}}catch{}
-  }
+  if(!force&&cached&&now-stamp<REFRESH_MS){try{sprites=JSON.parse(cached);render();return{ok:true,count:sprites.length,time:stamp,source:"保存済みデータ"}}catch{}}
   try{
-    const res=await fetch(SOURCE,{cache:"no-store"}); if(!res.ok) throw new Error("HTTP "+res.status);
-    sprites=parseSource(await res.json());
-    localStorage.setItem(DATA_KEY,JSON.stringify(sprites));
-    localStorage.setItem(DATA_TIME_KEY,String(now));
-    render(); return{ok:true,count:sprites.length,time:now,source:"公開データ"};
+    const res=await fetch(SOURCE+"?t="+now,{cache:"no-store"}); if(!res.ok) throw new Error("HTTP "+res.status);
+    const next=parseSource(await res.json());
+    const changed=JSON.stringify(next)!==JSON.stringify(sprites);
+    sprites=next; localStorage.setItem(DATA_KEY,JSON.stringify(sprites)); localStorage.setItem(DATA_TIME_KEY,String(now));
+    render(); return{ok:true,count:sprites.length,time:now,source:changed?"公開データ（更新あり）":"公開データ"};
   }catch(e){
     if(cached){try{sprites=JSON.parse(cached);render();return{ok:true,count:sprites.length,time:stamp,source:"保存済みデータ"}}catch{}}
     render(); return{ok:false,count:0,time:0,source:"取得失敗"};
@@ -45,8 +33,8 @@ async function syncSprites(force=false){
 function setSyncStatus(info){
   const el=$("#syncStatus"); if(!el)return;
   if(!info){el.textContent="Spriteデータを確認中…";return}
-  if(info.ok) el.innerHTML="✅ Spriteデータ取得成功<br><b>"+info.count+"件</b>を読み込みました<br><small>"+info.source+"・最終更新: "+timeText(info.time)+"</small>";
-  else el.innerHTML="⚠️ Spriteデータを取得できませんでした<br><small>保存済みデータがある場合はそれを使用します。</small>";
+  if(info.ok) el.innerHTML="✅ "+info.source+"<br><b>"+info.count+"件</b>を読み込み済み<br><small>最終確認: "+timeText(info.time)+"</small>";
+  else el.innerHTML="⚠️ Spriteデータを取得できませんでした";
 }
 function render(){
   const q=($("#search").value||"").toLowerCase(),f=$("#filter").value;
@@ -65,5 +53,7 @@ $("#restore").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new Fi
 $("#reset").onclick=()=>{if(confirm("この端末のSprite Checkデータをリセットしますか？")){state={};save()}};
 $("#sync").onclick=async()=>{const b=$("#sync");b.disabled=true;b.textContent="更新中…";setSyncStatus(null);const info=await syncSprites(true);setSyncStatus(info);b.disabled=false;b.textContent="Spriteデータ更新";alert(info.ok?"Spriteデータを更新しました。\n"+info.count+"件を読み込みました。":"更新できませんでした。")};
 if(localStorage.getItem("sprite-theme")==="dark")document.body.classList.add("dark");
-$("#lang").textContent=lang==="ja"?"EN":"JP";render();setSyncStatus(null);syncSprites(false).then(setSyncStatus);
+$("#lang").textContent=lang==="ja"?"EN":"JP";render();setSyncStatus(null);
+syncSprites(true).then(setSyncStatus);
+setInterval(()=>syncSprites(true).then(setSyncStatus),REFRESH_MS);
 if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
