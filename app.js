@@ -1,1 +1,61 @@
-const KEY="sprite-check-state-v1";let state=JSON.parse(localStorage.getItem(KEY)||"{}");let lang=localStorage.getItem("sprite-lang")||"ja";const $=s=>document.querySelector(s);const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));function save(){localStorage.setItem(KEY,JSON.stringify(state));render()}function item(id){return state[id]||(state[id]={owned:false,master:false,level:1,manual:false})}function render(){const q=$("#search").value.toLowerCase();const f=$("#filter").value;const list=SPRITES.filter(s=>(!q||s.name.toLowerCase().includes(q))&&(f==="all"||f==="owned"&&item(s.id).owned||f==="unowned"&&!item(s.id).owned||f==="master"&&item(s.id).master||f==="upcoming"&&s.status==="upcoming"||f==="new"&&s.isNew));$("#grid").innerHTML=list.map(s=>{const x=item(s.id);return '<article class="card"><img class="sprite-img" src="'+esc(s.imageUrl||"")+'" alt=""><h3>'+esc(s.name)+'</h3><div class="row"><span class="badge">'+esc(s.status)+'</span>'+(s.isNew?'<span class="badge">NEW</span>':'')+'</div><p><label><input type="checkbox" data-id="'+s.id+'" data-k="owned" '+(x.owned?"checked":"")+'> 所持</label> <label><input type="checkbox" data-id="'+s.id+'" data-k="master" '+(x.master?"checked":"")+'> Master</label></p><label>Lv <input style="width:65px" type="number" min="1" max="999" value="'+x.level+'" data-id="'+s.id+'" data-k="level"></label></article>'}).join("")||'<div class="empty">該当するSpriteがありません</div>';const owned=SPRITES.filter(s=>item(s.id).owned).length,master=SPRITES.filter(s=>item(s.id).master).length;$("#owned").textContent=owned;$("#master").textContent=master;$("#rate").textContent=SPRITES.length?Math.round(owned/SPRITES.length*100)+"%":"0%"}document.addEventListener("change",e=>{const id=e.target.dataset.id,k=e.target.dataset.k;if(id&&k){const x=item(id);x[k]=k==="level"?Math.max(1,Number(e.target.value)||1):e.target.checked;x.manual=true;save()}});$("#search").addEventListener("input",render);$("#filter").addEventListener("change",render);$("#theme").onclick=()=>{document.body.classList.toggle("dark");localStorage.setItem("sprite-theme",document.body.classList.contains("dark")?"dark":"light")};$("#lang").onclick=()=>{lang=lang==="ja"?"en":"ja";localStorage.setItem("sprite-lang",lang);$("#lang").textContent=lang==="ja"?"EN":"JP"};$("#import").onchange=e=>{const box=$("#preview");box.innerHTML="";[...e.target.files].forEach(f=>{if(!f.type.startsWith("image/"))return;const img=document.createElement("img");img.src=URL.createObjectURL(f);box.appendChild(img)});$("#review").textContent=e.target.files.length+"枚を読み込みました。認識結果は確認してから反映する構成です。"};$("#export").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:"application/json"}));a.download="sprite-check-backup.json";a.click()};$("#restore").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{state=JSON.parse(r.result);save();alert("復元しました")}catch{alert("バックアップ形式が正しくありません")}};r.readAsText(f)};$("#reset").onclick=()=>{if(confirm("この端末のSprite Checkデータをリセットしますか？")){state={};save()}};if(localStorage.getItem("sprite-theme")==="dark")document.body.classList.add("dark");$("#lang").textContent=lang==="ja"?"EN":"JP";render();if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
+const KEY="sprite-check-state-v1";
+const DATA_KEY="sprite-check-catalog-v1";
+const DATA_TIME_KEY="sprite-check-catalog-time-v1";
+const SOURCE="https://raw.githubusercontent.com/mombiemala/fnsprites/main/src/data/sprites.js";
+const REFRESH_MS=12*60*60*1000;
+let state=JSON.parse(localStorage.getItem(KEY)||"{}");
+let lang=localStorage.getItem("sprite-lang")||"ja";
+let sprites=Array.isArray(window.SPRITES)?window.SPRITES:[];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function save(){localStorage.setItem(KEY,JSON.stringify(state));render()}
+function item(id){return state[id]||(state[id]={owned:false,master:false,level:1,manual:false})}
+function parseSource(text){
+  const start=text.indexOf("export const SPRITE_TYPES = ["),end=text.indexOf("\n]\n\nexport const RARITY_ORDER",start);
+  if(start<0||end<0) throw new Error("catalog format");
+  const body=text.slice(start,end),out=[];
+  const re=/\{\s*id:\s*'([^']+)'[\s\S]*?name:\s*'([^']+)'[\s\S]*?icon:\s*'([^']*)'[\s\S]*?rarity:\s*'([^']+)'[\s\S]*?released:\s*(true|false)[\s\S]*?(?:releaseDate:\s*'([^']*)')?[\s\S]*?variants:\s*\{([^}]*)\}\s*\}/g;
+  const themes={normal:"Normal",gold:"Gold",gummy:"Gummy",galaxy:"Galaxy",gem:"Gem",holofoil:"Holofoil",cube:"Cube",quack:"Quack",cheatmaster:"Cheat Master",loothacker:"Loot Hacker",bountyhunter:"Bounty Hunter"};
+  const c7s4=new Set(["sonic","tails","shadow","jazz","klombo","bushranger","victorycrown","jonesy","blaster","killswitch","adventure","stormscout","overshield","megaman","pond","onigiri","xray","crash","blinky","morgana","birthday","phasedash","vampire","honey","dumpster","squibbly","cube","headshot"]);
+  let m;
+  while((m=re.exec(body))){
+    const id=m[1],name=m[2],icon=m[3],rarity=m[4],releaseDate=m[6]||"",variantText=m[7];
+    const vr=/([a-z]+):\s*(R|U)/g; let v;
+    while((v=vr.exec(variantText))){
+      const theme=v[1],released=v[2]==="R"; if(!themes[theme]) continue;
+      const finalReleased=released||(!!releaseDate&&new Date().toISOString().slice(0,10)>=releaseDate);
+      const ext=c7s4.has(id)?"webp":"png";
+      out.push({id:id+"_"+theme,name:name+" · "+themes[theme],season:c7s4.has(id)?"Chapter 7 Season 4":"Chapter 7 Season 3",releaseDate,status:finalReleased?"released":"upcoming",imageUrl:"https://raw.githubusercontent.com/mombiemala/fnsprites/main/public/sprites/"+id+"_"+theme+"."+ext,isNew:!!releaseDate&&Date.now()-Date.parse(releaseDate+"T00:00:00Z")>=0&&Date.now()-Date.parse(releaseDate+"T00:00:00Z")<=8*86400000,icon,rarity,source:"FN Sprite Tracker"});
+    }
+  }
+  if(out.length<10) throw new Error("catalog empty");
+  return out;
+}
+async function syncSprites(force=false){
+  const now=Date.now(),cached=localStorage.getItem(DATA_KEY),stamp=Number(localStorage.getItem(DATA_TIME_KEY)||0);
+  if(!force&&cached&&now-stamp<REFRESH_MS){try{sprites=JSON.parse(cached);return false}catch{}}
+  try{
+    const res=await fetch(SOURCE,{cache:"no-store"}); if(!res.ok) throw new Error("HTTP "+res.status);
+    sprites=parseSource(await res.text()); localStorage.setItem(DATA_KEY,JSON.stringify(sprites)); localStorage.setItem(DATA_TIME_KEY,String(now)); render(); return true;
+  }catch(e){if(cached){try{sprites=JSON.parse(cached)}catch{}} return false}
+}
+function render(){
+  const q=($("#search").value||"").toLowerCase(),f=$("#filter").value;
+  const list=sprites.filter(s=>(!q||s.name.toLowerCase().includes(q))&&(f==="all"||f==="owned"&&item(s.id).owned||f==="unowned"&&!item(s.id).owned||f==="master"&&item(s.id).master||f==="upcoming"&&s.status==="upcoming"||f==="new"&&s.isNew));
+  $("#grid").innerHTML=list.map(s=>{const x=item(s.id);return '<article class="card"><img class="sprite-img" src="'+esc(s.imageUrl||"")+'" alt="'+esc(s.name)+'" loading="lazy" onerror="this.style.display=\'none\'"><h3>'+esc(s.name)+'</h3><div class="row"><span class="badge">'+esc(s.status)+'</span>'+(s.isNew?'<span class="badge">NEW</span>':'')+'</div><p><label><input type="checkbox" data-id="'+s.id+'" data-k="owned" '+(x.owned?"checked":"")+'> 所持</label> <label><input type="checkbox" data-id="'+s.id+'" data-k="master" '+(x.master?"checked":"")+'> Master</label></p><label>Lv <input style="width:65px" type="number" min="1" max="5" value="'+Math.min(5,x.level||1)+'" data-id="'+s.id+'" data-k="level"></label></article>'}).join("")||'<div class="empty">該当するSpriteがありません</div>';
+  const owned=sprites.filter(s=>item(s.id).owned).length,master=sprites.filter(s=>item(s.id).master).length;
+  $("#owned").textContent=owned;$("#master").textContent=master;$("#rate").textContent=sprites.length?Math.round(owned/sprites.length*100)+"%":"0%";
+  if($("#syncStatus")) $("#syncStatus").textContent="自動更新対象: "+sprites.length+"件";
+}
+document.addEventListener("change",e=>{const id=e.target.dataset.id,k=e.target.dataset.k;if(id&&k){const x=item(id);x[k]=k==="level"?Math.max(1,Math.min(5,Number(e.target.value)||1)):e.target.checked;x.manual=true;save()}});
+$("#search").addEventListener("input",render);$("#filter").addEventListener("change",render);
+$("#theme").onclick=()=>{document.body.classList.toggle("dark");localStorage.setItem("sprite-theme",document.body.classList.contains("dark")?"dark":"light")};
+$("#lang").onclick=()=>{lang=lang==="ja"?"en":"ja";localStorage.setItem("sprite-lang",lang);$("#lang").textContent=lang==="ja"?"EN":"JP"};
+$("#import").onchange=e=>{const box=$("#preview");box.innerHTML="";[...e.target.files].forEach(f=>{if(!f.type.startsWith("image/"))return;const img=document.createElement("img");img.src=URL.createObjectURL(f);box.appendChild(img)});$("#review").textContent=e.target.files.length+"枚を読み込みました。認識結果は確認してから反映する構成です。"};
+$("#export").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:"application/json"}));a.download="sprite-check-backup.json";a.click()};
+$("#restore").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{state=JSON.parse(r.result);save();alert("復元しました")}catch{alert("バックアップ形式が正しくありません")}};r.readAsText(f)};
+$("#reset").onclick=()=>{if(confirm("この端末のSprite Checkデータをリセットしますか？")){state={};save()}};
+$("#sync").onclick=async()=>{const b=$("#sync");b.disabled=true;b.textContent="更新中…";const ok=await syncSprites(true);b.disabled=false;b.textContent="Spriteデータ更新";alert(ok?"Spriteデータを更新しました。":"更新できませんでした。保存済みデータを使用します。")};
+if(localStorage.getItem("sprite-theme")==="dark")document.body.classList.add("dark");
+$("#lang").textContent=lang==="ja"?"EN":"JP";render();syncSprites(false).then(()=>render());
+if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
