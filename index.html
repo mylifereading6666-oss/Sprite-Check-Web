@@ -10,6 +10,7 @@
 <header class="top"><div><h1>Sprite Check</h1><p>Spriteコレクション管理</p></div><div class="actions"><button id="theme">🌙</button><button id="lang">EN</button></div></header>
 <section class="stats"><div class="stat">所持<b id="owned">0</b></div><div class="stat">Master<b id="master">0</b></div><div class="stat">達成率<b id="rate">0%</b></div></section>
 <section class="panel"><div class="toolbar"><input id="search" placeholder="Spriteを検索"><select id="filter"><option value="all">すべて</option><option value="owned">所持</option><option value="unowned">未所持</option><option value="master">Master</option><option value="upcoming">近日登場</option><option value="new">新着</option></select></div></section>
+<section class="panel"><div class="row"><button id="sync">Spriteデータ更新</button><span id="syncStatus">自動更新対象を確認中…</span></div><p>新しいSpriteが公開データに追加されると、次回更新時に一覧へ反映します。</p></section>
 <section class="panel"><h2>画像チェック</h2><input id="import" type="file" accept="image/*" multiple><div id="preview" class="import-preview"></div><p id="review">画像を選択すると確認用に表示します。</p></section>
 <section class="panel"><div class="row"><button id="export">バックアップ出力</button><label><button type="button" onclick="document.getElementById('restore').click()">バックアップ復元</button><input id="restore" type="file" accept=".json" hidden></label><button id="reset" class="danger">データリセット</button></div></section>
 <main id="grid" class="grid"></main>
