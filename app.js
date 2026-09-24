@@ -54,9 +54,68 @@ function makeUpcomingCatalog(){const out=[];for(const x of UPCOMING_FALLBACK){fo
 async function fetchTrustedUpcoming(){try{const res=await fetch(TRUSTED_UPDATES_SOURCE+"?t="+Date.now(),{cache:"no-store"});if(!res.ok)throw new Error("HTTP "+res.status);const text=await res.text();const lower=text.toLowerCase();const out=makeUpcomingCatalog();if(lower.includes("birthday")&&!lower.includes("2026-09-26")){}return out}catch{return makeUpcomingCatalog()}}
 
 async function syncSprites(force=false){
-  const now=Date.now(),cached=localStorage.getItem(DATA_KEY),stamp=Number(localStorage.getItem(DATA_TIME_KEY)||0);
-  if(!force&&cached&&now-stamp<REFRESH_MS){try{sprites=JSON.parse(cached);render();return{ok:true,count:sprites.length,time:stamp,source:"保存済みデータ"}}catch{}}
-  try{const res=await fetch(SOURCE+"?t="+now,{cache:"no-store"});if(!res.ok)throw new Error("HTTP "+res.status);const next=normalizeCatalog(await res.json());const trusted=await fetchTrustedUpcoming();const base=next.filter(x=>x.status!=="upcoming");const releasedNames=new Set(base.map(x=>x.name));const byId=new Map(base.map(x=>[x.id,x]));for(const x of trusted){if(!releasedNames.has(x.name)&&!byId.has(x.id))byId.set(x.id,x)}const final=[...byId.values()];const oldIds=new Set(sprites.map(x=>x.id));final.forEach(x=>x.isNew=!oldIds.has(x.id));const changed=JSON.stringify(final)!==JSON.stringify(sprites);sprites=final;localStorage.setItem(DATA_KEY,JSON.stringify(sprites));localStorage.setItem(DATA_TIME_KEY,String(now));localStorage.setItem("sprite-check-last-source-v1",JSON.stringify({checked_at:now,primary:SOURCE,updates:TRUSTED_UPDATES_SOURCE,sprites:TRUSTED_SPRITES_SOURCE,count:sprites.length}));render();renderNews();renderUserNotifications();if(changed)notifyNewSprites();return{ok:true,count:sprites.length,time:now,source:changed?"信頼済み公開データ（更新あり）":"信頼済み公開データ"}}catch(e){if(cached)try{sprites=JSON.parse(cached);render();return{ok:true,count:sprites.length,time:stamp,source:"保存済みデータ"}}catch{}return{ok:false,count:0,time:0,source:"取得失敗"}}}
+  const now=Date.now();
+  const cached=localStorage.getItem(DATA_KEY);
+  const stamp=Number(localStorage.getItem(DATA_TIME_KEY)||0);
+
+  // Logged-in users read the canonical server catalog. The browser cache is
+  // only an offline fallback; it is never the authoritative source.
+  if(sb && session){
+    try{
+      const q=await sb.from("sprites").select("source_key,external_id,parent,variant,name,season,image_url,release_date,status,rarity,is_new,source_url,source_name,metadata").order("season").order("parent").order("variant");
+      if(!q.error && Array.isArray(q.data) && q.data.length){
+        sprites=q.data.map(x=>({
+          id:x.source_key,
+          name:x.name,
+          season:x.season||"",
+          releaseDate:x.release_date||"",
+          status:x.status||"unconfirmed",
+          imageUrl:x.image_url||"",
+          isNew:!!x.is_new,
+          rarity:x.rarity||"",
+          source:x.source_name||"",
+          sourceUrl:x.source_url||"",
+          externalId:x.external_id||"",
+          parent:x.parent||"",
+          variant:x.variant||"base"
+        }));
+        localStorage.setItem(DATA_KEY,JSON.stringify(sprites));
+        localStorage.setItem(DATA_TIME_KEY,String(now));
+        localStorage.setItem("sprite-check-last-source-v2",JSON.stringify({checked_at:now,source:"Supabase canonical sprites",count:sprites.length}));
+        render();renderNews();renderUserNotifications();
+        return {ok:true,count:sprites.length,time:now,source:"Supabase canonical Sprite catalog"};
+      }
+    }catch(err){console.warn("canonical catalog unavailable",err)}
+  }
+
+  if(!force&&cached&&now-stamp<REFRESH_MS){
+    try{sprites=JSON.parse(cached);render();return{ok:true,count:sprites.length,time:stamp,source:"保存済みオフラインデータ"}}catch{}
+  }
+
+  // Offline/first-install fallback. New canonical records are created by
+  // the server-side sprite-sync Edge Function, never by ordinary clients.
+  try{
+    const res=await fetch(SOURCE+"?t="+now,{cache:"no-store"});
+    if(!res.ok)throw new Error("HTTP "+res.status);
+    const next=normalizeCatalog(await res.json());
+    const trusted=await fetchTrustedUpcoming();
+    const byId=new Map(next.map(x=>[x.id,x]));
+    const names=new Set(next.map(x=>x.name));
+    for(const x of trusted)if(!names.has(x.name)&&!byId.has(x.id))byId.set(x.id,x);
+    const final=[...byId.values()];
+    const oldIds=new Set(sprites.map(x=>x.id));
+    final.forEach(x=>x.isNew=!oldIds.has(x.id));
+    sprites=final;
+    localStorage.setItem(DATA_KEY,JSON.stringify(sprites));
+    localStorage.setItem(DATA_TIME_KEY,String(now));
+    render();renderNews();
+    return{ok:true,count:sprites.length,time:now,source:"公開データ（オフライン準備用）"};
+  }catch(e){
+    if(cached)try{sprites=JSON.parse(cached);render();return{ok:true,count:sprites.length,time:stamp,source:"保存済みオフラインデータ"}}catch{}
+    return{ok:false,count:0,time:0,source:"取得失敗"};
+  }
+}
+
 function setSyncStatus(info){const el=$("#syncStatus");if(!el)return;if(!info){el.textContent=t("Spriteデータを確認中…","Checking Sprite data…");return}el.innerHTML=info.ok?"✅ "+esc(info.source)+"<br><b>"+info.count+"件</b>を読み込み済み<br><small>最終確認: "+timeText(info.time)+"</small>":"⚠️ "+t("Spriteデータを取得できませんでした","Could not fetch Sprite data")}
 
 async function renderUserNotifications(){
@@ -290,3 +349,248 @@ connectSupabase().catch(e=>setApiStatus("⚠️ "+e.message));
 openPage("sprites");
 setInterval(()=>syncSprites(true).then(setSyncStatus),REFRESH_MS);
 if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
+
+
+/* ============================================================
+   FINAL SPEC INTEGRATION
+   ============================================================ */
+const FINAL_SITE_URL="https://mylifereading6666-oss.github.io/Sprite-Check-Web/";
+let autoTranslate=localStorage.getItem("sprite-auto-translate")==="1";
+let serverOnline=false;
+
+function updateFinalRoleUi(){
+  const isSuper=profile?.role==="superadmin";
+  const isAdmin=profile?.role==="admin"||isSuper;
+  $("#superadminSpriteSync")?.classList.toggle("hidden",!isSuper);
+  $("#superadminTools")?.classList.toggle("hidden",!isSuper);
+  $("#menuAdmin")?.classList.toggle("hidden",!isAdmin);
+  $("#adminPanel")?.classList.toggle("hidden",!isAdmin);
+  if($("#adminRegistrationCode")) $("#adminRegistrationCode").disabled=!session;
+  if($("#autoTranslate")) $("#autoTranslate").checked=autoTranslate;
+}
+function updateFinalStats(){
+  if($("#totalSprites"))$("#totalSprites").textContent=sprites.filter(s=>s.status==="released").length;
+  if($("#totalLabel"))$("#totalLabel").textContent=t("登場済みSprite","Released Sprites");
+}
+const originalRender=render;
+render=function(){
+  originalRender();
+  updateFinalStats();
+  updateFinalRoleUi();
+};
+
+const originalRenderAuth=renderAuth;
+renderAuth=function(){
+  originalRenderAuth();
+  updateFinalRoleUi();
+};
+
+async function loadCanonicalAfterAuth(){
+  if(!sb||!session)return;
+  const info=await syncSprites(true);
+  setSyncStatus(info);
+  updateFinalRoleUi();
+  await renderSocial();
+  await renderAnnouncements();
+  if(profile?.role==="admin"||profile?.role==="superadmin")await renderAdmin();
+}
+
+async function invokeSuperadminSpriteSync(){
+  if(!sb||!session||profile?.role!=="superadmin"){
+    return alert(t("この操作は最上位管理者だけが実行できます。","Only the Super Admin can run this action."));
+  }
+  const b=$("#superadminSpriteSync");
+  if(b){b.disabled=true;b.textContent=t("👑 更新中…","👑 Updating…")}
+  try{
+    const {data,error}=await sb.functions.invoke("sprite-sync",{body:{type:"manual"}});
+    if(error)throw error;
+    alert(t(
+      "更新完了：新規 "+(data?.new_count??0)+"件 / 更新 "+(data?.updated_count??0)+"件",
+      "Update complete: "+(data?.new_count??0)+" new / "+(data?.updated_count??0)+" updated"
+    ));
+    await syncSprites(true);
+    await renderAnnouncements();
+  }catch(err){
+    alert(t("Sprite更新に失敗しました。","Sprite update failed.")+"\\n"+(err.message||err));
+  }finally{
+    if(b){b.disabled=false;b.textContent=t("👑 Spriteを今すぐ更新","👑 Update Sprites now")}
+    updateFinalRoleUi();
+  }
+}
+$("#superadminSpriteSync")?.addEventListener("click",invokeSuperadminSpriteSync);
+
+async function uploadAnnouncementImage(file){
+  if(!file||!sb||!session)return "";
+  if(!file.type.startsWith("image/"))throw new Error(t("画像ファイルを選択してください。","Select an image file."));
+  if(file.size>5*1024*1024)throw new Error(t("画像は5MB以下にしてください。","Images must be 5MB or smaller."));
+  const path=session.user.id+"/"+Date.now()+"-"+file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+  const up=await sb.storage.from("announcements").upload(path,file,{contentType:file.type,upsert:false});
+  if(up.error)throw up.error;
+  const pub=sb.storage.from("announcements").getPublicUrl(path);
+  return pub.data.publicUrl;
+}
+
+const originalPostAnnouncement=postAnnouncement;
+postAnnouncement=async function(){
+  if(!sb||!session||!profile||![\"admin\",\"superadmin\"].includes(profile.role))return;
+  const title=$("#adminAnnouncementTitle")?.value.trim();
+  const titleEn=$("#adminAnnouncementTitleEn")?.value.trim()||"";
+  const body=$("#adminAnnouncementBody")?.value.trim();
+  const bodyEn=$("#adminAnnouncementBodyEn")?.value.trim()||"";
+  const source=$("#adminAnnouncementSource")?.value.trim()||"";
+  const file=$("#adminAnnouncementFile")?.files?.[0];
+  if(!title||!body)return alert(t("タイトルと本文を入力してください。","Enter a title and body."));
+  try{
+    let image=$("#adminAnnouncementImage")?.value.trim()||"";
+    if(file)image=await uploadAnnouncementImage(file);
+    const {error}=await sb.from("announcements").insert({
+      author_id:session.user.id,title,title_en:titleEn,body,body_en:bodyEn,
+      image_url:image,source_url:source,source_name:source?"Source":"",
+      kind:"admin"
+    });
+    if(error)throw error;
+    ["adminAnnouncementTitle","adminAnnouncementTitleEn","adminAnnouncementBody","adminAnnouncementBodyEn","adminAnnouncementImage","adminAnnouncementSource"].forEach(id=>{if($("#"+id))$("#"+id).value=""});
+    if($("#adminAnnouncementFile"))$("#adminAnnouncementFile").value="";
+    await renderAnnouncements();await renderAdminAnnouncements();
+  }catch(err){alert(err.message||String(err))}
+};
+
+$("#registerAdmin")?.addEventListener("click",async()=>{
+  if(!sb||!session)return alert(t("ログインしてください。","Sign in first."));
+  const code=$("#adminRegistrationCode")?.value.trim();
+  if(!code)return;
+  const {data,error}=await sb.rpc("register_as_admin",{p_code:code});
+  if(error)return alert(error.message);
+  if(data){
+    $("#adminRegistrationCode").value="";
+    await loadProfile();
+    renderAuth();
+    alert(t("管理者登録が完了しました。","Admin registration completed."));
+  }else alert(t("コードが無効、または期限切れです。","The code is invalid or expired."));
+});
+
+$("#generateAdminCode")?.addEventListener("click",async()=>{
+  if(profile?.role!=="superadmin")return;
+  const {data,error}=await sb.functions.invoke("admin-code",{body:{action:"generate-and-send"}});
+  if(error)return alert(error.message);
+  alert(t("今週の管理者登録コードを生成しました。最上位管理者向けメール送信処理を実行しました。","This week's admin registration code was generated and the delivery process was started."));
+});
+
+$("#adminRoleHistory")?.addEventListener("click",async()=>{
+  if(profile?.role!=="superadmin")return;
+  const r=await sb.from("admin_role_changes").select("*").order("created_at",{ascending:false}).limit(100);
+  $("#adminRoleHistoryList").innerHTML=(r.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.old_role)+' → '+esc(x.new_role)+'</b><small>'+esc(x.target_user_id||"")+' · '+timeText(x.created_at)+' · '+esc(x.reason||"")+'</small></div>').join("")||"<p>履歴なし</p>";
+});
+
+$("#resetPassword")?.addEventListener("click",async()=>{
+  if(!sb)return;
+  const email=$("#email")?.value.trim();
+  if(!email)return alert(t("メールアドレスを入力してください。","Enter your email address."));
+  const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:FINAL_SITE_URL});
+  if(error)alert(error.message);
+  else alert(t("パスワード再設定メールを送信しました。","Password reset email requested."));
+});
+
+$("#langJa")?.addEventListener("click",()=>setLanguageFinal("ja"));
+$("#langEn")?.addEventListener("click",()=>setLanguageFinal("en"));
+$("#autoTranslate")?.addEventListener("change",e=>{
+  autoTranslate=!!e.target.checked;
+  localStorage.setItem("sprite-auto-translate",autoTranslate?"1":"0");
+});
+
+function setLanguageFinal(next){
+  lang=next==="en"?"en":"ja";
+  localStorage.setItem("sprite-lang",lang);
+  applyLanguage();
+  render();renderAuth();renderSocial();renderNews();
+}
+
+async function translateMessage(messageId,text,kind="direct"){
+  if(!sb||!session||!text)return null;
+  const target=lang==="ja"?"ja":"en";
+  const cached=await sb.from("message_translations").select("translated_body")
+    .eq("message_id",messageId).eq("message_kind",kind).eq("target_language",target).maybeSingle();
+  if(cached.data?.translated_body)return cached.data.translated_body;
+  const {data,error}=await sb.functions.invoke("translate-message",{
+    body:{message_id:messageId,message_kind:kind,text,target_language:target}
+  });
+  if(error)return null;
+  return data?.translated_body||null;
+}
+
+async function renderChatFinal(){
+  const box=$("#chatBox");if(!box||!sb||!session||!activeChatUser)return;
+  const ids=[session.user.id,activeChatUser].sort();
+  const {data,error}=await sb.from("direct_messages").select("*")
+    .in("sender_id",ids).in("recipient_id",ids).order("created_at");
+  if(error){box.textContent=error.message;return}
+  box.innerHTML="";
+  for(const m of data||[]){
+    const wrap=document.createElement("div");
+    wrap.className="message "+(m.sender_id===session.user.id?"mine":"");
+    const body=document.createElement("div");body.textContent=m.body;
+    const meta=document.createElement("small");meta.textContent=timeText(m.created_at);
+    const tr=document.createElement("button");tr.className="secondary";tr.textContent=t("翻訳","Translate");
+    tr.onclick=async()=>{
+      tr.disabled=true;
+      const translated=await translateMessage(m.id,m.body,"direct");
+      if(translated){body.textContent=translated;tr.textContent=t("原文","Original");tr.onclick=()=>{body.textContent=m.body;tr.textContent=t("翻訳","Translate")}}
+      tr.disabled=false;
+    };
+    wrap.append(body,meta,tr);box.appendChild(wrap);
+    if(autoTranslate && m.sender_id!==session.user.id){
+      const translated=await translateMessage(m.id,m.body,"direct");
+      if(translated)body.textContent=translated;
+    }
+  }
+}
+$("#openChat")?.addEventListener("click",()=>{activeChatUser=$("#chatUser").value.trim();renderChatFinal()});
+$("#sendChat")?.addEventListener("click",async()=>{
+  if(!sb||!session||!activeChatUser)return;
+  const body=$("#chatMessage").value.trim();if(!body)return;
+  const {error}=await sb.from("direct_messages").insert({sender_id:session.user.id,recipient_id:activeChatUser,body,source_language:lang});
+  if(error)alert(error.message);else{$("#chatMessage").value="";renderChatFinal()}
+});
+
+async function loadFinalCanonical(){
+  if(!sb||!session)return;
+  await loadCanonicalAfterAuth();
+}
+window.addEventListener("online",()=>{serverOnline=true;syncOfflineChanges().catch(()=>{})});
+window.addEventListener("offline",()=>{serverOnline=false});
+
+async function syncOfflineChanges(){
+  if(!sb||!session)return;
+  const pending=JSON.parse(localStorage.getItem("sprite-check-pending-v1")||"[]");
+  if(!pending.length)return;
+  const remaining=[];
+  for(const row of pending){
+    const {error}=await sb.from("sprite_state").upsert(row,{onConflict:"user_id,sprite_id"});
+    if(error)remaining.push(row);
+  }
+  localStorage.setItem("sprite-check-pending-v1",JSON.stringify(remaining));
+  if(!remaining.length) setApiStatus(t("☁️ オフライン変更を同期しました。","☁️ Offline changes synchronized."));
+}
+
+const originalSave=save;
+save=function(){
+  originalSave();
+  if(!sb||!session||!navigator.onLine){
+    const rows=JSON.parse(localStorage.getItem("sprite-check-pending-v1")||"[]");
+    const map=new Map(rows.map(x=>[x.sprite_id,x]));
+    for(const [sprite_id,x] of Object.entries(state)){
+      map.set(sprite_id,{user_id:session?.user?.id||"offline",sprite_id,owned:!!x.owned,master:!!x.master,level:Number(x.level)||1,manual:!!x.manual,updated_at:x.updated_at||nowIso()});
+    }
+    localStorage.setItem("sprite-check-pending-v1",JSON.stringify([...map.values()]));
+  }
+};
+
+async function setupRealtimeFinal(){
+  if(!sb||!session)return;
+  sb.channel("sprite-check-live-"+session.user.id)
+    .on("postgres_changes",{event:"*",schema:"public",table:"notifications",filter:"user_id=eq."+session.user.id},()=>renderUserNotifications())
+    .on("postgres_changes",{event:"*",schema:"public",table:"exchange_chat_messages"},()=>renderSocial())
+    .subscribe();
+}
+setTimeout(()=>setupRealtimeFinal(),1200);
+setTimeout(()=>loadFinalCanonical(),1500);
