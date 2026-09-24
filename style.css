@@ -2,3 +2,5 @@
 #reviewResults{margin-top:12px}.review-card{margin:8px 0}.review-card label{display:block;margin:6px 0}.review-card small{opacity:.7}
 
 .season-group{margin-top:18px}.season-group>h2{margin:18px 0 10px}.detect-list{max-height:360px;overflow:auto;margin:10px 0;padding:8px;border:1px solid #d1d5db;border-radius:10px}.detect-row{display:flex;gap:8px;align-items:center;padding:5px 0}.review-card{margin:8px 0}
+
+#apiUrl{min-width:280px;padding:8px;border:1px solid #d1d5db;border-radius:10px;background:transparent;color:inherit}.season-group{margin-top:18px}.season-group>h2{margin:18px 0 10px}.detect-list{max-height:360px;overflow:auto;margin:10px 0;padding:8px;border:1px solid #d1d5db;border-radius:10px}.detect-row{display:flex;gap:8px;align-items:center;padding:5px 0}@media(max-width:600px){#apiUrl{min-width:0;width:100%}}
