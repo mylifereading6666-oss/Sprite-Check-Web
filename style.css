@@ -1,6 +1,57 @@
-*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f3f4f6;color:#111827}body.dark{background:#0f172a;color:#e5e7eb}.app{max-width:1100px;margin:auto;padding:20px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.actions{display:flex;gap:8px}button,select,input{font:inherit}button{border:0;border-radius:10px;padding:9px 12px;cursor:pointer;background:#111827;color:white}.dark button{background:#e5e7eb;color:#111827}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.stat{padding:16px;border-radius:14px;background:white;box-shadow:0 2px 10px #0001}.dark .stat,.dark .panel,.dark .card{background:#1e293b}.stat b{display:block;font-size:25px}.panel{background:white;border-radius:14px;padding:14px;margin:12px 0;box-shadow:0 2px 10px #0001}.toolbar{display:grid;grid-template-columns:1fr auto;gap:10px}.toolbar input,.toolbar select{padding:10px;border:1px solid #d1d5db;border-radius:10px;background:transparent;color:inherit}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}.card{background:white;border-radius:14px;padding:12px;box-shadow:0 2px 10px #0001}.sprite-img{width:100%;aspect-ratio:1.3;object-fit:cover;border-radius:10px;background:#e5e7eb}.card h3{margin:10px 0 6px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row label{font-size:13px}.badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#e5e7eb;font-size:12px}.dark .badge{background:#334155}.empty{text-align:center;padding:30px;opacity:.7}.import-preview{display:flex;gap:8px;overflow:auto}.import-preview img{width:80px;height:80px;object-fit:cover;border-radius:8px}.danger{background:#b91c1c!important}@media(max-width:600px){.app{padding:12px}.stats{grid-template-columns:1fr}.toolbar{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.card{padding:9px}}
-#reviewResults{margin-top:12px}.review-card{margin:8px 0}.review-card label{display:block;margin:6px 0}.review-card small{opacity:.7}
-
-.season-group{margin-top:18px}.season-group>h2{margin:18px 0 10px}.detect-list{max-height:360px;overflow:auto;margin:10px 0;padding:8px;border:1px solid #d1d5db;border-radius:10px}.detect-row{display:flex;gap:8px;align-items:center;padding:5px 0}.review-card{margin:8px 0}
-
-#apiUrl{min-width:280px;padding:8px;border:1px solid #d1d5db;border-radius:10px;background:transparent;color:inherit}.season-group{margin-top:18px}.season-group>h2{margin:18px 0 10px}.detect-list{max-height:360px;overflow:auto;margin:10px 0;padding:8px;border:1px solid #d1d5db;border-radius:10px}.detect-row{display:flex;gap:8px;align-items:center;padding:5px 0}@media(max-width:600px){#apiUrl{min-width:0;width:100%}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f3f4f6;color:#111827}
+body.dark{background:#0f172a;color:#e5e7eb}
+.app{max-width:1180px;margin:auto;padding:20px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.actions{display:flex;gap:8px}
+button,select,input{font:inherit}
+button{border:0;border-radius:10px;padding:9px 12px;cursor:pointer;background:#111827;color:white}
+button.secondary{background:#64748b}
+.dark button{background:#e5e7eb;color:#111827}.dark button.secondary{background:#94a3b8;color:#0f172a}
+button:disabled{opacity:.55;cursor:not-allowed}
+input,select{padding:9px;border:1px solid #d1d5db;border-radius:10px;background:transparent;color:inherit}
+.dark input,.dark select{border-color:#475569}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}
+.stat{padding:16px;border-radius:14px;background:white;box-shadow:0 2px 10px #0001}
+.dark .stat,.dark .panel,.dark .card{background:#1e293b}
+.stat b{display:block;font-size:25px}
+.panel{background:white;border-radius:14px;padding:14px;margin:12px 0;box-shadow:0 2px 10px #0001}
+.toolbar{display:grid;grid-template-columns:1fr auto auto;gap:10px}
+.config-grid,.auth-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.config-grid input,.auth-grid input{width:100%}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.card{background:white;border-radius:14px;padding:12px;box-shadow:0 2px 10px #0001}
+.sprite-img{width:100%;aspect-ratio:1.3;object-fit:cover;border-radius:10px;background:#e5e7eb}
+.card h3{margin:10px 0 6px}.level-input{width:65px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row label{font-size:13px}
+.badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#e5e7eb;font-size:12px}
+.dark .badge{background:#334155}
+.empty{text-align:center;padding:30px;opacity:.7}
+.import-preview{display:flex;gap:8px;overflow:auto}
+.import-preview img{width:80px;height:80px;object-fit:cover;border-radius:8px}
+.danger{background:#b91c1c!important;color:#fff!important}
+.hidden{display:none!important}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.tab-content{min-height:80px}
+.list{display:grid;gap:7px;max-height:330px;overflow:auto}
+.list-item{padding:10px;border:1px solid #d1d5db;border-radius:10px;display:grid;gap:4px}
+.dark .list-item{border-color:#475569}
+.list-item small,.message small{opacity:.7;font-size:11px}
+.list-item button{justify-self:start}
+.chat-box{min-height:180px;max-height:360px;overflow:auto;padding:10px;border:1px solid #d1d5db;border-radius:10px;margin-bottom:8px}
+.message{max-width:80%;padding:8px 10px;border-radius:10px;background:#e5e7eb;margin:5px 0;display:grid;gap:4px}
+.dark .message{background:#334155}
+.message.mine{margin-left:auto}
+.admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.detect-list{max-height:420px;overflow:auto;margin:10px 0;padding:8px;border:1px solid #d1d5db;border-radius:10px}
+.detect-row{display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid #0001}
+.season-group{margin-top:18px}.season-group>h2{margin:18px 0 10px}
+#reviewResults{margin-top:12px}
+#apiStatus,#authStatus,#syncStatus,#ocrStatus,#notificationStatus{overflow-wrap:anywhere}
+@media(max-width:700px){
+ .app{padding:12px}.stats{grid-template-columns:1fr}.toolbar{grid-template-columns:1fr}
+ .config-grid,.auth-grid,.admin-grid{grid-template-columns:1fr}
+ .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .card{padding:9px}.detect-row{align-items:flex-start;flex-wrap:wrap}
+}
