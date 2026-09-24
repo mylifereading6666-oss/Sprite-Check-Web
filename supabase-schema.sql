@@ -891,3 +891,44 @@ grant execute on function public.set_account_suspension(uuid,boolean,text) to au
 
 grant select on public.direct_messages to authenticated;
 grant insert,update on public.direct_messages to authenticated;
+
+
+
+-- Support attachment bucket.
+insert into storage.buckets(id,name,public,allowed_mime_types,file_size_limit)
+values('support','support',false,array['image/*'],5242880)
+on conflict(id) do update set public=false,allowed_mime_types=array['image/*'],file_size_limit=5242880;
+
+drop policy if exists support_storage_read on storage.objects;
+create policy support_storage_read on storage.objects
+for select to authenticated
+using (
+  bucket_id='support' and (
+    public.is_admin()
+    or (name like (select auth.uid()::text)||'/%')
+  )
+);
+drop policy if exists support_storage_insert on storage.objects;
+create policy support_storage_insert on storage.objects
+for insert to authenticated
+with check (
+  bucket_id='support' and (
+    public.is_admin() or name like (select auth.uid()::text)||'/%'
+  )
+);
+drop policy if exists support_storage_delete on storage.objects;
+create policy support_storage_delete on storage.objects
+for delete to authenticated
+using (bucket_id='support' and (public.is_admin() or owner_id=(select auth.uid()::text)));
+
+-- Weekly admin-code job: Monday 00:00 JST = Sunday 15:00 UTC.
+-- The Edge Function must be deployed and the server-only secret key supplied
+-- in the cron request. The plaintext code is never stored in Postgres.
+-- select cron.schedule(
+--   'sprite-check-weekly-admin-code','0 15 * * 0',
+--   $$select net.http_post(
+--      url:='https://qhogmxiyghashlxeuikm.supabase.co/functions/v1/admin-code-cron',
+--      headers:=jsonb_build_object('Content-Type','application/json','apikey','SERVER_ONLY_SECRET'),
+--      body:='{"type":"weekly"}'::jsonb
+--   )$$
+-- );
