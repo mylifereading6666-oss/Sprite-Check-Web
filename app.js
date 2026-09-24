@@ -74,7 +74,7 @@ function applyLanguage(){
 }
 function renderAuth(){
   const logged=!!session;$("#signUp").classList.toggle("hidden",logged);$("#signIn").classList.toggle("hidden",logged);$("#signOut").classList.toggle("hidden",!logged);
-  $("#authStatus").textContent=logged?t("ログイン中: "+(profile?.display_name||"ユーザー"),"Signed in: "+(profile?.display_name||"User")):sb?t("Supabase接続済み・未ログイン","Supabase connected · not signed in"):t("端末内モードで利用中です","Using local device mode");
+  $("#authStatus").textContent=logged?(profile?.role==="superadmin"?t("👑 最上位管理者としてログイン中: ","👑 Signed in as Super Admin: "):profile?.role==="admin"?t("🛡️ 管理者としてログイン中: ","🛡️ Signed in as Admin: "):t("👤 一般ユーザーとしてログイン中: ","👤 Signed in as User: "))+(profile?.display_name||"ユーザー"):sb?t("Supabase接続済み・未ログイン","Supabase connected · not signed in"):t("端末内モードで利用中です","Using local device mode");
   $("#adminPanel").classList.toggle("hidden",!(profile&&(profile.role==="admin"||profile.role==="superadmin")));
 }
 
@@ -140,13 +140,14 @@ $("#sendChat").onclick=async()=>{if(!sb||!session||!activeChatUser)return;const 
 
 async function renderAdmin(){
   const ok=profile&&(profile.role==="admin"||profile.role==="superadmin");$("#adminPanel").classList.toggle("hidden",!ok);if(!ok||!sb)return;
+  const heading=$("#adminPanel h2");if(heading)heading.textContent=profile.role==="superadmin"?"👑 最上位管理者":"🛡️ 管理者";
   const u=await sb.from("profiles").select("id,display_name,role,created_at").order("created_at",{ascending:false});$("#userList").innerHTML=(u.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.display_name||x.id)+'</b><small>'+esc(x.role)+' · '+esc(x.id)+'</small><button data-user="'+x.id+'">Sprite編集</button></div>').join("");$$("[data-user]").forEach(b=>b.onclick=()=>openAdminUser(b.dataset.user));
   const a=await sb.from("audit_logs").select("*").order("created_at",{ascending:false}).limit(50);$("#auditList").innerHTML=(a.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.action)+'</b><small>'+esc(x.actor_id||"")+" · "+timeText(x.created_at)+'</small></div>').join("");
   const iq=await sb.from("inquiries").select("*").order("created_at",{ascending:false}).limit(50);$("#adminInquiryList").innerHTML=(iq.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.subject)+'</b><small>'+esc(x.status||"open")+' · '+esc(x.user_id)+'</small></div>').join("");
 }
 async function openAdminUser(userId){
   $("#adminEditor").classList.remove("hidden");$("#adminUserId").value=userId;
-  $("#adminEditorTitle").textContent="ユーザーのSprite編集 · "+userId;
+  $("#adminEditorTitle").textContent=(profile?.role==="superadmin"?"👑 最上位管理者":"🛡️ 管理者")+"：ユーザーのSprite編集 · "+userId;
   const {data,error}=await sb.from("sprite_state").select("*").eq("user_id",userId);if(error)return alert(error.message);
   const map=Object.fromEntries((data||[]).map(x=>[x.sprite_id,x]));
   const q=$("#adminSearch").value.toLowerCase();
