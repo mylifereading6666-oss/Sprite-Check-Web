@@ -90,7 +90,7 @@ function checklistPixelDetect(file){
       const redAt=(x,y)=>{const X=Math.round(x*sx),Y=Math.round(y*sy),W=Math.round(62*sx),H=Math.round(62*sy);if(X<0||Y<0||X+W>img.width||Y+H>img.height)return 0;const d=ctx.getImageData(X,Y,W,H).data;let n=0;for(let i=0;i<d.length;i+=4)if(d[i]>170&&d[i+1]<120&&d[i+2]<120)n++;return n};
       const yellowAt=(x,y)=>{const X=Math.round((x-8)*sx),Y=Math.round((y-138)*sy),W=Math.round(73*sx),H=Math.round(55*sy);if(X<0||Y<0||X+W>img.width||Y+H>img.height)return 0;const d=ctx.getImageData(X,Y,W,H).data;let n=0;for(let i=0;i<d.length;i+=4)if(d[i]>180&&d[i+1]>125&&d[i+2]<100)n++;return n};
       const cells=[];
-      for(let r=0;r<10;r++)for(let col=0;col<10;col++){const x=xs[col],y=ys[r];cells.push({owned:redAt(x,y)>120,master:yellowAt(x,y)>115})}
+      for(let r=0;r<10;r++)for(let col=0;col<10;col++){const x=xs[col],y=ys[r];cells.push({owned:redAt(x,y)>120,master:yellowAt(x,y)>184})}
       const topRegion=ctx.getImageData(Math.round(img.width*.40),Math.round(img.height*.06),Math.round(img.width*.20),Math.round(img.height*.13)).data;
       let topRed=0,topYellow=0;for(let i=0;i<topRegion.length;i+=4){if(topRegion[i]>170&&topRegion[i+1]<120&&topRegion[i+2]<120)topRed++;if(topRegion[i]>180&&topRegion[i+1]>125&&topRegion[i+2]<100)topYellow++}
       cells.unshift({owned:topRed>120,master:topYellow>120});
