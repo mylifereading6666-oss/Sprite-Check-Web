@@ -6,6 +6,7 @@ const REFRESH_MS=5000;
 let state=JSON.parse(localStorage.getItem(KEY)||"{}");
 let lang=localStorage.getItem("sprite-lang")||"ja";
 let sprites=Array.isArray(window.SPRITES)?window.SPRITES:[];
+let selectedFiles=[];let recognitionResults=[];
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function save(){localStorage.setItem(KEY,JSON.stringify(state));render()}
@@ -47,7 +48,14 @@ document.addEventListener("change",e=>{const id=e.target.dataset.id,k=e.target.d
 $("#search").addEventListener("input",render);$("#filter").addEventListener("change",render);
 $("#theme").onclick=()=>{document.body.classList.toggle("dark");localStorage.setItem("sprite-theme",document.body.classList.contains("dark")?"dark":"light")};
 $("#lang").onclick=()=>{lang=lang==="ja"?"en":"ja";localStorage.setItem("sprite-lang",lang);$("#lang").textContent=lang==="ja"?"EN":"JP"};
-$("#import").onchange=e=>{const box=$("#preview");box.innerHTML="";[...e.target.files].forEach(f=>{if(!f.type.startsWith("image/"))return;const img=document.createElement("img");img.src=URL.createObjectURL(f);box.appendChild(img)});$("#review").textContent=e.target.files.length+"枚を読み込みました。認識結果は確認してから反映する構成です。"};
+$("#import").onchange=e=>{selectedFiles=[...e.target.files].filter(f=>f.type.startsWith("image/"));const box=$("#preview");box.innerHTML="";selectedFiles.forEach(f=>{const img=document.createElement("img");img.src=URL.createObjectURL(f);box.appendChild(img)});$("#ocrStatus").textContent=selectedFiles.length+"枚を選択しました。";$("#reviewResults").innerHTML=""};
+
+function normalize(s){return String(s||"").toLowerCase().replace(/[^a-z0-9\\u3040-\\u30ff\\u3400-\\u9fff]/gi,"")}
+function similarity(a,b){a=normalize(a);b=normalize(b);if(!a||!b)return 0;if(a===b)return 1;if(a.includes(b)||b.includes(a))return .86;let h=0;for(const c of new Set(a))if(b.includes(c))h++;return h/Math.max(new Set(a).size,new Set(b).size)}
+function findCandidates(text){return sprites.map(s=>({s,score:similarity(text,s.name)})).filter(x=>x.score>=.18).sort((a,b)=>b.score-a.score).slice(0,5)}
+function renderReview(){const box=$("#reviewResults");box.innerHTML=recognitionResults.map((r,i)=>"<div class=\"card review-card\"><b>画像 "+(i+1)+"</b><p>OCR: "+esc(r.text||"文字なし")+"</p>"+r.candidates.map((c,j)=>"<label><input type=\"checkbox\" class=\"candidate\" data-ri=\""+i+"\" data-si=\""+j+"\"> "+esc(c.s.name)+" <small>"+Math.round(c.score*100)+"%</small></label>").join("")+"</div>").join("")+(recognitionResults.length?"<button id=\"applyRecognition\">選択した候補を所持に反映</button>":"");const b=$("#applyRecognition");if(b)b.onclick=applyRecognition}
+function applyRecognition(){let n=0;document.querySelectorAll(".candidate:checked").forEach(el=>{const r=recognitionResults[+el.dataset.ri],c=r.candidates[+el.dataset.si];if(c){const x=item(c.s.id);x.owned=true;x.manual=true;n++}});save();$("#ocrStatus").textContent=n+"件を所持に反映しました。";alert(n+"件を所持に反映しました。")}
+$("#recognize").onclick=async()=>{if(!selectedFiles.length)return alert("先に画像を選択してください。");if(!window.Tesseract)return alert("OCRライブラリを読み込めませんでした。");const b=$("#recognize");b.disabled=true;recognitionResults=[];try{const worker=await Tesseract.createWorker("eng+jpn");for(let i=0;i<selectedFiles.length;i++){b.textContent="認識中… "+(i+1)+"/"+selectedFiles.length;const out=await worker.recognize(selectedFiles[i]);recognitionResults.push({text:out.data.text.trim(),candidates:findCandidates(out.data.text)});renderReview()}await worker.terminate();$("#ocrStatus").textContent="認識完了。候補を確認してください。"}catch(e){$("#ocrStatus").textContent="認識に失敗しました。";alert("画像認識に失敗しました。")}finally{b.disabled=false;b.textContent="画像からSpriteを認識"}};
 $("#export").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:"application/json"}));a.download="sprite-check-backup.json";a.click()};
 $("#restore").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{state=JSON.parse(r.result);save();alert("復元しました")}catch{alert("バックアップ形式が正しくありません")}};r.readAsText(f)};
 $("#reset").onclick=()=>{if(confirm("この端末のSprite Checkデータをリセットしますか？")){state={};save()}};
