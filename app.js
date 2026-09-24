@@ -1,7 +1,7 @@
 const KEY="sprite-check-state-v1";
 const DATA_KEY="sprite-check-catalog-v1";
 const DATA_TIME_KEY="sprite-check-catalog-time-v1";
-const SOURCE="https://raw.githubusercontent.com/mombiemala/fnsprites/main/src/data/sprites.js";
+const SOURCE="https://raw.githubusercontent.com/valincius/fn-sprites/main/src/sprites.json";
 const REFRESH_MS=12*60*60*1000;
 let state=JSON.parse(localStorage.getItem(KEY)||"{}");
 let lang=localStorage.getItem("sprite-lang")||"ja";
@@ -10,33 +10,30 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function save(){localStorage.setItem(KEY,JSON.stringify(state));render()}
 function item(id){return state[id]||(state[id]={owned:false,master:false,level:1,manual:false})}
-function parseSource(text){
-  const start=text.indexOf("export const SPRITE_TYPES = ["),end=text.indexOf("\n]\n\nexport const RARITY_ORDER",start);
-  if(start<0||end<0) throw new Error("catalog format");
-  const body=text.slice(start,end),out=[];
-  const re=/\{\s*id:\s*'([^']+)'[\s\S]*?name:\s*'([^']+)'[\s\S]*?icon:\s*'([^']*)'[\s\S]*?rarity:\s*'([^']+)'[\s\S]*?released:\s*(true|false)[\s\S]*?(?:releaseDate:\s*'([^']*)')?[\s\S]*?variants:\s*\{([^}]*)\}\s*\}/g;
-  const themes={normal:"Normal",gold:"Gold",gummy:"Gummy",galaxy:"Galaxy",gem:"Gem",holofoil:"Holofoil",cube:"Cube",quack:"Quack",cheatmaster:"Cheat Master",loothacker:"Loot Hacker",bountyhunter:"Bounty Hunter"};
-  const c7s4=new Set(["sonic","tails","shadow","jazz","klombo","bushranger","victorycrown","jonesy","blaster","killswitch","adventure","stormscout","overshield","megaman","pond","onigiri","xray","crash","blinky","morgana","birthday","phasedash","vampire","honey","dumpster","squibbly","cube","headshot"]);
-  let m;
-  while((m=re.exec(body))){
-    const id=m[1],name=m[2],icon=m[3],rarity=m[4],releaseDate=m[6]||"",variantText=m[7];
-    const vr=/([a-z]+):\s*(R|U)/g; let v;
-    while((v=vr.exec(variantText))){
-      const theme=v[1],released=v[2]==="R"; if(!themes[theme]) continue;
-      const finalReleased=released||(!!releaseDate&&new Date().toISOString().slice(0,10)>=releaseDate);
-      const ext=c7s4.has(id)?"webp":"png";
-      out.push({id:id+"_"+theme,name:name+" · "+themes[theme],season:c7s4.has(id)?"Chapter 7 Season 4":"Chapter 7 Season 3",releaseDate,status:finalReleased?"released":"upcoming",imageUrl:"https://raw.githubusercontent.com/mombiemala/fnsprites/main/public/sprites/"+id+"_"+theme+"."+ext,isNew:!!releaseDate&&Date.now()-Date.parse(releaseDate+"T00:00:00Z")>=0&&Date.now()-Date.parse(releaseDate+"T00:00:00Z")<=8*86400000,icon,rarity,source:"FN Sprite Tracker"});
-    }
-  }
-  if(out.length<10) throw new Error("catalog empty");
-  return out;
+const variantNames={base:"Normal",normal:"Normal",gold:"Gold",candy:"Gummy",gummy:"Gummy",galaxy:"Galaxy",gem:"Gem",holofoil:"Holofoil",cube:"Cube",quack:"Quack",cheatmaster:"Cheat Master",loothacker:"Loot Hacker",bountyhunter:"Bounty Hunter"};
+function parseSource(rows){
+  if(!Array.isArray(rows)||!rows.length) throw new Error("catalog empty");
+  return rows.filter(x=>x&&x.parent&&x.url).map(x=>({
+    id:"fn-"+String(x.spriteId)+"-"+String(x.variant||"base"),
+    name:String(x.parent)+" · "+(variantNames[x.variant]||String(x.variant||"Normal")),
+    season:x.season||"",
+    releaseDate:"",
+    status:"released",
+    imageUrl:x.url,
+    isNew:false,
+    rarity:x.rarity||"",
+    source:"FN Sprite catalog"
+  }));
 }
 async function syncSprites(force=false){
   const now=Date.now(),cached=localStorage.getItem(DATA_KEY),stamp=Number(localStorage.getItem(DATA_TIME_KEY)||0);
   if(!force&&cached&&now-stamp<REFRESH_MS){try{sprites=JSON.parse(cached);return false}catch{}}
   try{
     const res=await fetch(SOURCE,{cache:"no-store"}); if(!res.ok) throw new Error("HTTP "+res.status);
-    sprites=parseSource(await res.text()); localStorage.setItem(DATA_KEY,JSON.stringify(sprites)); localStorage.setItem(DATA_TIME_KEY,String(now)); render(); return true;
+    sprites=parseSource(await res.json());
+    localStorage.setItem(DATA_KEY,JSON.stringify(sprites));
+    localStorage.setItem(DATA_TIME_KEY,String(now));
+    render(); return true;
   }catch(e){if(cached){try{sprites=JSON.parse(cached)}catch{}} return false}
 }
 function render(){
