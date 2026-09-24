@@ -160,10 +160,55 @@ $("#sendChat").onclick=async()=>{if(!sb||!session||!activeChatUser)return;const 
 async function renderAdmin(){
   const ok=profile&&(profile.role==="admin"||profile.role==="superadmin");$("#adminPanel").classList.toggle("hidden",!ok);if(!ok||!sb)return;
   const heading=$("#adminPanel h2");if(heading)heading.textContent=profile.role==="superadmin"?"👑 最上位管理者":"🛡️ 管理者";
-  const u=await sb.from("profiles").select("id,display_name,role,created_at").order("created_at",{ascending:false});$("#userList").innerHTML=(u.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.display_name||x.id)+'</b><small>'+esc(x.role)+' · '+esc(x.id)+'</small><button data-user="'+x.id+'">Sprite編集</button></div>').join("");$$("[data-user]").forEach(b=>b.onclick=()=>openAdminUser(b.dataset.user));
-  const a=await sb.from("audit_logs").select("*").order("created_at",{ascending:false}).limit(50);$("#auditList").innerHTML=(a.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.action)+'</b><small>'+esc(x.actor_id||"")+" · "+timeText(x.created_at)+'</small></div>').join("");
-  const iq=await sb.from("inquiries").select("*").order("created_at",{ascending:false}).limit(50);$("#adminInquiryList").innerHTML=(iq.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.subject)+'</b><small>'+esc(x.status||"open")+' · '+esc(x.user_id)+'</small></div>').join("");
+  const u=await sb.from("profiles").select("id,display_name,role,created_at").order("created_at",{ascending:false});
+  $("#userList").innerHTML=(u.data||[]).map(x=>{
+    const roleButtons=profile.role==="superadmin"&&x.id!==session.user.id?'<button data-role-user="'+x.id+'" data-role="admin">管理者</button><button class="secondary" data-role-user="'+x.id+'" data-role="user">一般</button>':"";
+    return '<div class="list-item"><b>'+esc(x.display_name||x.id)+'</b><small>'+esc(x.role)+' · '+esc(x.id)+'</small><div class="row"><button data-user="'+x.id+'">Sprite編集</button>'+roleButtons+'</div></div>'
+  }).join("")||"<p>ユーザーなし</p>";
+  $$("[data-user]").forEach(b=>b.onclick=()=>openAdminUser(b.dataset.user));
+  $$("[data-role-user]").forEach(b=>b.onclick=()=>changeUserRole(b.dataset.roleUser,b.dataset.role));
+  const a=await sb.from("audit_logs").select("*").order("created_at",{ascending:false}).limit(100);
+  $("#auditList").innerHTML=(a.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.action)+'</b><small>'+esc(x.actor_id||"")+" → "+esc(x.target_user_id||"")+" · "+timeText(x.created_at)+'</small></div>').join("")||"<p>ログなし</p>";
+  await renderAdminExchanges();
+  await renderAdminInquiries();
 }
+async function changeUserRole(userId,role){
+  if(!sb||!session||profile?.role!=="superadmin")return;
+  if(userId===session.user.id)return alert(t("自分自身の権限はここから変更できません。","You cannot change your own role here."));
+  const {error}=await sb.from("profiles").update({role}).eq("id",userId);
+  if(error)alert(error.message);else{await sb.from("audit_logs").insert({actor_id:session.user.id,target_user_id:userId,action:"role_change",details:{role}});await renderAdmin();}
+}
+async function renderAdminExchanges(){
+  const box=$("#adminExchangeList");if(!box||!sb)return;
+  const r=await sb.from("exchange_posts").select("*").order("created_at",{ascending:false}).limit(100);
+  box.innerHTML=(r.data||[]).map(x=>'<div class="list-item"><b>'+esc(sprites.find(s=>s.id===x.sprite_id)?.name||x.sprite_id)+'</b><small>'+esc(x.type)+' · '+esc(x.status)+' · '+esc(x.owner_id)+'</small><div class="row"><button data-exclose="'+x.id+'">閉じる</button><button data-exdelete="'+x.id+'" class="danger">削除</button></div></div>').join("")||"<p>交換募集なし</p>";
+  $$("[data-exclose]").forEach(b=>b.onclick=()=>moderateExchange(b.dataset.exclose,"closed"));
+  $$("[data-exdelete]").forEach(b=>b.onclick=()=>deleteExchange(b.dataset.exdelete));
+}
+async function moderateExchange(id,status){if(!sb||!profile)return;const {error}=await sb.from("exchange_posts").update({status}).eq("id",id);if(error)alert(error.message);else{await sb.from("audit_logs").insert({actor_id:session.user.id,action:"exchange_moderation",details:{post_id:id,status}});renderAdminExchanges();}}
+async function deleteExchange(id){if(!sb||!profile)return;if(!confirm(t("この交換募集を削除しますか？","Delete this exchange post?")))return;const {error}=await sb.from("exchange_posts").delete().eq("id",id);if(error)alert(error.message);else{await sb.from("audit_logs").insert({actor_id:session.user.id,action:"exchange_delete",details:{post_id:id}});renderAdminExchanges();}}
+async function renderAdminInquiries(){
+  const box=$("#adminInquiryList");if(!box||!sb)return;
+  const r=await sb.from("inquiries").select("*").order("created_at",{ascending:false}).limit(100);
+  box.innerHTML=(r.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.subject)+'</b><small>'+esc(x.status||"open")+' · '+esc(x.user_id)+' · '+timeText(x.created_at)+'</small><div class="row"><button data-iqstatus="'+x.id+'" data-status="answered">回答済み</button><button data-iqstatus="'+x.id+'" data-status="closed" class="secondary">閉じる</button><input data-iqmsg="'+x.id+'" placeholder="回答メッセージ"><button data-iqsend="'+x.id+'">送信</button></div></div>').join("")||"<p>問い合わせなし</p>";
+  $$("[data-iqstatus]").forEach(b=>b.onclick=()=>setInquiryStatus(b.dataset.iqstatus,b.dataset.status));
+  $$("[data-iqsend]").forEach(b=>b.onclick=()=>replyInquiry(b.dataset.iqsend));
+}
+async function setInquiryStatus(id,status){const {error}=await sb.from("inquiries").update({status}).eq("id",id);if(error)alert(error.message);else{await sb.from("audit_logs").insert({actor_id:session.user.id,action:"inquiry_status",details:{inquiry_id:id,status}});renderAdminInquiries();}}
+async function replyInquiry(id){
+  const input=$('[data-iqmsg="'+id+'"]'),body=input?.value.trim();if(!body)return;
+  const {error}=await sb.from("inquiry_messages").insert({inquiry_id:id,sender_id:session.user.id,body});
+  if(error)alert(error.message);else{await sb.from("inquiries").update({status:"answered"}).eq("id",id);const q=await sb.from("inquiries").select("user_id,subject").eq("id",id).single();if(q.data)await sb.from("notifications").insert({user_id:q.data.user_id,title:"問い合わせへの回答",body});await sb.from("audit_logs").insert({actor_id:session.user.id,target_user_id:q.data?.user_id,action:"inquiry_reply",details:{inquiry_id:id}});renderAdminInquiries();}
+}
+$("#adminBroadcast").onclick=async()=>{
+  if(!sb||!profile)return;
+  const title=$("#adminNoticeTitle").value.trim(),body=$("#adminNoticeBody").value.trim();if(!title||!body)return;
+  const users=await sb.from("profiles").select("id");if(users.error)return alert(users.error.message);
+  const rows=(users.data||[]).map(u=>({user_id:u.id,title,body}));
+  if(rows.length){const r=await sb.from("notifications").insert(rows);if(r.error)return alert(r.error.message);}
+  await sb.from("audit_logs").insert({actor_id:session.user.id,action:"broadcast_notification",details:{title,count:rows.length}});
+  $("#adminNoticeTitle").value="";$("#adminNoticeBody").value="";alert(t("全ユーザーへ通知しました。","Broadcast sent to all users."));
+};
 async function openAdminUser(userId){
   $("#adminEditor").classList.remove("hidden");$("#adminUserId").value=userId;
   $("#adminEditorTitle").textContent=(profile?.role==="superadmin"?"👑 最上位管理者":"🛡️ 管理者")+"：ユーザーのSprite編集 · "+userId;
