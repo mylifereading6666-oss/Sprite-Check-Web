@@ -24,7 +24,7 @@
 
 <section class="page-section" id="recognitionPage"><section class="panel"><h2 id="recognitionTitle">画像チェック・自動認識</h2><input id="import" type="file" accept="image/*" multiple><div id="preview" class="import-preview"></div><div class="row" style="margin-top:10px"><button id="recognize">画像からSpriteを認識</button><button id="notifyNew" class="secondary">新着通知を許可</button><span id="ocrStatus">画像を選択してください。</span></div><div id="reviewResults"></div><p id="recognitionHelp">認識結果は自動確定せず、候補を確認してから反映します。手動変更は自動認識で上書きしません。</p></section></section>
 
-<section class="page-section" id="newsPage"><section class="panel"><h2>📢 お知らせ</h2><div id="newsList" class="list"><div class="list-item"><b>Sprite Checkへようこそ</b><small>新しいSprite情報やアップデートはここに表示されます。</small></div></div></section>
+<section class="page-section" id="newsPage"><section class="panel"><h2>📢 お知らせ</h2><div id="newsList" class="list"><div class="list-item"><b>Sprite Checkへようこそ</b><small>新しいSprite情報やアップデートはここに表示されます。</small></div></div></section><section class="panel"><h3>📰 最新のお知らせ</h3><div id="announcementList" class="list"></div></section>
 <section class="panel"><h3>🔔 あなたへの通知</h3><div id="userNotifications" class="list"></div></section></section>
 
 <section class="page-section" id="socialPage"><section class="panel"><h2 id="socialTitle">交流・問い合わせ</h2><div class="tabs"><button data-tab="exchange">Sprite交換</button><button data-tab="chat">チャット</button><button data-tab="inquiry">問い合わせ</button></div>
@@ -38,7 +38,9 @@
 <div><h3>📜 監査ログ</h3><div id="auditList" class="list"></div></div>
 </div>
 <div class="panel admin-tools">
-<h3>📢 通知</h3><div class="row"><input id="adminNoticeTitle" placeholder="通知タイトル"><input id="adminNoticeBody" placeholder="通知内容" style="flex:1"><button id="adminBroadcast">全ユーザーへ通知</button></div>
+<h3>📢 通知</h3><div class="row"><input id="adminNoticeTitle" placeholder="通知タイトル"><input id="adminNoticeBody" placeholder="通知内容" style="flex:1"><input id="adminNoticeImage" type="url" placeholder="画像URL（任意）"><button id="adminBroadcast">全ユーザーへ通知</button></div>
+<div class="row"><input id="adminAnnouncementTitle" placeholder="お知らせタイトル"><input id="adminAnnouncementBody" placeholder="本文" style="flex:1"><input id="adminAnnouncementImage" type="url" placeholder="画像URL（任意）"><input id="adminAnnouncementSource" type="url" placeholder="出典URL（任意）"><button id="adminPostAnnouncement">お知らせを投稿</button></div>
+<div id="adminAnnouncementList" class="list"></div>
 </div>
 <div class="panel admin-tools"><h3>🤝 交換管理</h3><div id="adminExchangeList" class="list"></div></div>
 <div class="panel admin-tools"><h3>💬 問い合わせ管理</h3><div id="adminInquiryList" class="list"></div></div>
