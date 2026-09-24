@@ -204,3 +204,30 @@ on conflict (key) do update set value=excluded.value,updated_at=now();
 
 grant select on public.app_settings to authenticated;
 grant insert,update,delete on public.app_settings to authenticated;
+
+
+-- Server-authoritative profile creation.
+-- The designated top-level admin is assigned by the database, not by browser code.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles(id, display_name, role)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'display_name', split_part(coalesce(new.email,''),'@',1)),
+    case when lower(coalesce(new.email,'')) = 'mylife.reading6666@gmail.com' then 'superadmin' else 'user' end
+  )
+  on conflict (id) do update set
+    display_name = excluded.display_name;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute function public.handle_new_user();
