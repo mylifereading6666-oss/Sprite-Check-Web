@@ -432,7 +432,7 @@ async function uploadAnnouncementImage(file){
 
 const originalPostAnnouncement=postAnnouncement;
 postAnnouncement=async function(){
-  if(!sb||!session||!profile||![\"admin\",\"superadmin\"].includes(profile.role))return;
+  if(!sb||!session||!profile||!["admin","superadmin"].includes(profile.role))return;
   const title=$("#adminAnnouncementTitle")?.value.trim();
   const titleEn=$("#adminAnnouncementTitleEn")?.value.trim()||"";
   const body=$("#adminAnnouncementBody")?.value.trim();
