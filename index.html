@@ -31,7 +31,18 @@
 <div id="chatTab" class="tab-content hidden"><div class="row"><input id="chatUser" placeholder="相手のユーザーID"><button id="openChat">チャットを開く</button></div><div id="chatBox" class="chat-box"></div><div class="row"><input id="chatMessage" placeholder="メッセージ"><button id="sendChat">送信</button></div></div>
 <div id="inquiryTab" class="tab-content hidden"><div class="row"><input id="inquirySubject" placeholder="問い合わせ件名"><button id="createInquiry">問い合わせを送る</button></div><div id="inquiryList" class="list"></div></div></section></section>
 
-<section class="page-section" id="adminPage"><section class="panel hidden" id="adminPanel"><h2>管理者</h2><div class="admin-grid"><div><h3>ユーザー</h3><div id="userList" class="list"></div></div><div><h3>監査ログ</h3><div id="auditList" class="list"></div></div></div><div id="adminEditor" class="hidden"><h3 id="adminEditorTitle">ユーザーのSprite編集</h3><input id="adminUserId" type="hidden"><input id="adminSearch" placeholder="Spriteを検索"><div id="adminSpriteList" class="detect-list"></div></div><div><h3>問い合わせ管理</h3><div id="adminInquiryList" class="list"></div></div></section></section>
+<section class="page-section" id="adminPage"><section class="panel hidden" id="adminPanel"><h2>管理者</h2>
+<div class="admin-grid">
+<div><h3>👥 ユーザー管理</h3><div id="userList" class="list"></div></div>
+<div><h3>📜 監査ログ</h3><div id="auditList" class="list"></div></div>
+</div>
+<div class="panel admin-tools">
+<h3>📢 通知</h3><div class="row"><input id="adminNoticeTitle" placeholder="通知タイトル"><input id="adminNoticeBody" placeholder="通知内容" style="flex:1"><button id="adminBroadcast">全ユーザーへ通知</button></div>
+</div>
+<div class="panel admin-tools"><h3>🤝 交換管理</h3><div id="adminExchangeList" class="list"></div></div>
+<div class="panel admin-tools"><h3>💬 問い合わせ管理</h3><div id="adminInquiryList" class="list"></div></div>
+<div id="adminEditor" class="hidden"><h3 id="adminEditorTitle">ユーザーのSprite編集</h3><input id="adminUserId" type="hidden"><input id="adminSearch" placeholder="Spriteを検索"><div id="adminSpriteList" class="detect-list"></div></div>
+</section></section>
 
 <section class="page-section" id="settingsPage"><section class="panel"><h2 id="cloudTitle">データ・バックアップ</h2>
 <div class="row"><button id="cloudSync">☁️ 今すぐ同期</button><button id="export">バックアップ出力</button><label><button type="button" class="secondary" onclick="document.getElementById('restore').click()">バックアップ復元</button><input id="restore" type="file" accept=".json" hidden></label><button id="reset" class="danger">データリセット</button></div>
