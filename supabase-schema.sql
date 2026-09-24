@@ -932,3 +932,6 @@ using (bucket_id='support' and (public.is_admin() or owner_id=(select auth.uid()
 --      body:='{"type":"weekly"}'::jsonb
 --   )$$
 -- );
+
+-- Keep historical user ownership data even if an administrator removes a catalog row.
+alter table public.sprite_state drop constraint if exists sprite_state_sprite_fk;
