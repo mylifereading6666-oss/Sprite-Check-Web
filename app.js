@@ -193,7 +193,7 @@ async function connectSupabase(){
     await loadProfile();renderNews();renderUserNotifications();renderAnnouncements();setApiStatus(t("✅ Supabaseに接続しました。","✅ Connected to Supabase."));renderAuth();if(session)await cloudPullState();
   }catch(e){sb=null;session=null;setApiStatus("⚠️ "+e.message)}
 }
-async function loadProfile(){profile=null;if(!sb||!session){renderAuth();return}const {data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).maybeSingle();if(error)throw error;if(data)profile=data;else{const name=$("#displayName").value.trim()||session.user.email.split("@")[0];const ins=await sb.from("profiles").insert({id:session.user.id,display_name:name,role:"user"}).select().single();if(!ins.error)profile=ins.data}renderAdmin()}
+async function loadProfile(){profile=null;if(!sb||!session){renderAuth();return}const {data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).maybeSingle();if(error)throw error;if(data)profile=data;else{const name=$("#displayName").value.trim()||session.user.email.split("@")[0];const ins=await sb.from("profiles").insert({id:session.user.id,display_name:name,role:"user"}).select().single();if(!ins.error)profile=ins.data}renderAdmin();startAdminHeartbeat()}
 async function cloudPullState(){
   if(!sb||!session)return;
   const {data,error}=await sb.from("sprite_state").select("*").eq("user_id",session.user.id);if(error){setApiStatus("⚠️ "+error.message);return}
