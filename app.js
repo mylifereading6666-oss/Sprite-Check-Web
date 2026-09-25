@@ -19,6 +19,17 @@ let lang=localStorage.getItem("sprite-lang")||"ja";
 let sprites=Array.isArray(window.SPRITES)?window.SPRITES:[];
 let selectedFiles=[], recognitionResults=[];
 let sb=null, session=null, profile=null, activeChatUser=null;
+window.addEventListener("error",e=>{
+  console.error("sprite-check-runtime-error",e.error||e.message);
+  const status=document.querySelector("#apiStatus");
+  if(status && !window.__spriteRuntimeReported){
+    window.__spriteRuntimeReported=true;
+    status.textContent="⚠️ アプリ内部エラー: "+(e.message||"JavaScript error");
+  }
+});
+window.addEventListener("unhandledrejection",e=>{
+  console.error("sprite-check-unhandled-rejection",e.reason);
+});
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -269,36 +280,70 @@ async function connectSupabase(){
   ]);
   try{
     if(!window.supabase)throw new Error("Supabase client library is not loaded");
+
     sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{
-      auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
+      auth:{
+        persistSession:true,
+        autoRefreshToken:true,
+        detectSessionInUrl:false
+      }
     });
+
     setApiStatus(t("☁️ Supabaseへ接続しています…","☁️ Connecting to Supabase…"));
-    const {data,error}=await withTimeout(sb.auth.getSession(),5000,"Supabase auth");
-    if(error)throw error;
-    session=data.session||null;
-    sb.auth.onAuthStateChange(async(_e,s)=>{
-      session=s;
-      try{await withTimeout(loadProfile(),5000,"Profile")}catch(e){console.warn("profile load",e)}
-      renderAuth();renderNews();
-      renderUserNotifications().catch(e=>console.warn("notifications",e));
-      if(session)cloudPullState().catch(e=>console.warn("cloud pull",e));
-      renderAnnouncements().catch(e=>console.warn("announcements",e));
-      autoAnnounceNewSprites().catch(e=>console.warn("auto announce",e));
+
+    // getSession() is local-session based, but older auth state can still
+    // become stuck. Always put a hard upper bound around startup.
+    const result=await withTimeout(sb.auth.getSession(),5000,"Supabase auth");
+    if(result.error)throw result.error;
+    session=result.data?.session||null;
+
+    // IMPORTANT: never await another Supabase call directly inside
+    // onAuthStateChange. Supabase documents a deadlock risk for async work
+    // performed inside this callback. Schedule it for the next task instead.
+    sb.auth.onAuthStateChange((_event,nextSession)=>{
+      session=nextSession||null;
+      setTimeout(async()=>{
+        try{
+          await withTimeout(loadProfile(),5000,"Profile");
+        }catch(e){
+          console.warn("profile load",e);
+        }
+        try{renderAuth();renderNews();}catch(e){console.warn("auth render",e)}
+        renderUserNotifications().catch(e=>console.warn("notifications",e));
+        if(session)cloudPullState().catch(e=>console.warn("cloud pull",e));
+        renderAnnouncements().catch(e=>console.warn("announcements",e));
+        autoAnnounceNewSprites().catch(e=>console.warn("auto announce",e));
+      },0);
     });
-    try{await withTimeout(loadProfile(),5000,"Profile")}catch(e){console.warn("profile load",e)}
+
+    try{
+      await withTimeout(loadProfile(),5000,"Profile");
+    }catch(e){
+      console.warn("profile load",e);
+    }
+
     renderNews();
     renderAuth();
-    setApiStatus(t("🟢 Supabase接続済み（認証OK）","🟢 Supabase connected (auth OK)"));\n    diagnoseSupabase().catch(()=>{});
+    setApiStatus(t("🟢 Supabase接続済み（認証OK）","🟢 Supabase connected (auth OK)"));
+    diagnoseSupabase().catch(e=>console.warn("Supabase diagnostic",e));
     renderUserNotifications().catch(e=>console.warn("notifications",e));
     renderAnnouncements().catch(e=>console.warn("announcements",e));
     if(session)cloudPullState().catch(e=>console.warn("cloud pull",e));
   }catch(e){
-    sb=null;session=null;
+    sb=null;
+    session=null;
+    const message=e?.message||String(e);
+    console.warn("Supabase startup failed:",e);
     setApiStatus(t(
-      "⚠️ サーバー接続がタイムアウトしました。端末内モードで利用できます。",
-      "⚠️ Server connection timed out. Local device mode is available."
+      "⚠️ Supabase接続を完了できませんでした。端末内モードで利用できます。",
+      "⚠️ Supabase connection could not be completed. Local mode is available."
     ));
-    renderAuth();
+    const authStatus=$("#authStatus");
+    if(authStatus)authStatus.textContent=t(
+      "端末内モードで利用中です（オンライン接続失敗）",
+      "Using local device mode (online connection failed)"
+    );
+    try{renderAuth()}catch(err){console.warn("renderAuth after connection failure",err)}
   }
 }
 async function loadProfile(){profile=null;if(!sb||!session){renderAuth();return}const {data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).maybeSingle();if(error)throw error;if(data)profile=data;else{const name=$("#displayName").value.trim()||session.user.email.split("@")[0];const ins=await sb.from("profiles").insert({id:session.user.id,display_name:name,role:"user"}).select().single();if(!ins.error)profile=ins.data}renderAdmin();startAdminHeartbeat()}
@@ -540,7 +585,6 @@ syncSprites(true).then(setSyncStatus).catch(()=>setSyncStatus({ok:false,count:0,
 connectSupabase().catch(e=>setApiStatus("⚠️ "+e.message));
 openPage("sprites");
 setInterval(()=>syncSprites(true).then(setSyncStatus).catch(()=>setSyncStatus({ok:false,count:0,time:0,source:"取得失敗"})),REFRESH_MS);
-if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
 
 
 /* ============================================================
