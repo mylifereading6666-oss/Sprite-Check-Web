@@ -31,7 +31,38 @@ window.addEventListener("unhandledrejection",e=>{
   console.error("sprite-check-unhandled-rejection",e.reason);
 });
 const $=s=>document.querySelector(s);
-const $$=s=>[...document.querySelectorAll(s)];
+const $=s=>[...document.querySelectorAll(s)];
+function initCoreUI(){
+  const menuToggle=$("#menuToggle");
+  const menuBackdrop=$("#menuBackdrop");
+  if(menuToggle)menuToggle.onclick=e=>{
+    e.preventDefault();e.stopPropagation();toggleMenu();
+  };
+  if(menuBackdrop)menuBackdrop.onclick=e=>{
+    e.preventDefault();e.stopPropagation();toggleMenu(false);
+  };
+  document.querySelectorAll("[data-page]").forEach(button=>{
+    button.onclick=e=>{
+      e.preventDefault();e.stopPropagation();openPage(button.dataset.page);
+    };
+  });
+  const search=$("#search"),filter=$("#filter"),season=$("#seasonFilter");
+  if(search)search.oninput=render;
+  if(filter)filter.onchange=render;
+  if(season)season.onchange=render;
+  const theme=$("#theme");
+  if(theme)theme.onclick=()=>{
+    document.body.classList.toggle("dark");
+    localStorage.setItem("sprite-theme",document.body.classList.contains("dark")?"dark":"light");
+  };
+  const language=$("#lang");
+  if(language)language.onclick=()=>{
+    lang=lang==="ja"?"en":"ja";
+    localStorage.setItem("sprite-lang",lang);
+    applyLanguage();render();renderAuth();renderSocial();
+  };
+}
+initCoreUI();
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const nowIso=()=>new Date().toISOString();
 const uid=()=>crypto.randomUUID?crypto.randomUUID():"id-"+Date.now()+"-"+Math.random().toString(36).slice(2);
@@ -198,18 +229,6 @@ function toggleMenu(force){
   menu.classList.toggle("open",open);
   backdrop.classList.toggle("hidden",!open);
 }
-$("#menuToggle").addEventListener("click",e=>{e.preventDefault();e.stopPropagation();toggleMenu()});
-$("#menuBackdrop").addEventListener("click",e=>{e.preventDefault();toggleMenu(false)});
-document.querySelectorAll("[data-page]").forEach(button=>{
-  button.addEventListener("click",e=>{
-    e.preventDefault();
-    e.stopPropagation();
-    openPage(button.dataset.page);
-  });
-});
-$("#search").addEventListener("input",render);$("#filter").addEventListener("change",render);$("#seasonFilter").addEventListener("change",render);
-$("#theme").onclick=()=>{document.body.classList.toggle("dark");localStorage.setItem("sprite-theme",document.body.classList.contains("dark")?"dark":"light")};
-$("#lang").onclick=()=>{lang=lang==="ja"?"en":"ja";localStorage.setItem("sprite-lang",lang);applyLanguage();render();renderAuth();renderSocial()};
 function applyLanguage(){
   document.documentElement.lang=lang;
   setText("#appSubtitle","Spriteコレクション管理","Sprite collection tracker");setText("#ownedLabel","所持","Owned");setText("#masterLabel","Master","Master");setText("#rateLabel","達成率","Completion");
