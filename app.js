@@ -62,7 +62,10 @@ async function syncSprites(force=false){
   // only an offline fallback; it is never the authoritative source.
   if(sb && session){
     try{
-      const q=await sb.from("sprites").select("source_key,external_id,parent,variant,name,season,image_url,release_date,status,rarity,is_new,source_url,source_name,metadata").order("season").order("parent").order("variant");
+      const q=await Promise.race([
+        sb.from("sprites").select("source_key,external_id,parent,variant,name,season,image_url,release_date,status,rarity,is_new,source_url,source_name,metadata").order("season").order("parent").order("variant"),
+        new Promise(resolve=>setTimeout(()=>resolve({error:new Error("canonical catalog timeout"),data:null}),8000))
+      ]);
       if(!q.error && Array.isArray(q.data) && q.data.length){
         sprites=q.data.map(x=>({
           id:x.source_key,
@@ -95,7 +98,14 @@ async function syncSprites(force=false){
   // Offline/first-install fallback. New canonical records are created by
   // the server-side sprite-sync Edge Function, never by ordinary clients.
   try{
-    const res=await fetch(SOURCE+"?t="+now,{cache:"no-store"});
+    const ctl=new AbortController();
+    const timer=setTimeout(()=>ctl.abort(),8000);
+    let res;
+    try{
+      res=await fetch(SOURCE+"?t="+now,{cache:"no-store",signal:ctl.signal});
+    }finally{
+      clearTimeout(timer);
+    }
     if(!res.ok)throw new Error("HTTP "+res.status);
     const next=normalizeCatalog(await res.json());
     const trusted=await fetchTrustedUpcoming();
