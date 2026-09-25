@@ -269,7 +269,9 @@ async function autoAnnounceNewSprites(){
 }
 async function renderAdmin(){
   const ok=profile&&(profile.role==="admin"||profile.role==="superadmin");$("#adminPanel").classList.toggle("hidden",!ok);if(!ok||!sb)return;
-  const heading=$("#adminPanel h2");if(heading)heading.textContent=profile.role==="superadmin"?"👑 最上位管理者":"🛡️ 管理者";
+  const heading=$("#adminPanel h2");if(heading)heading.textContent=profile.role==="superadmin"?"👑 最上位管理者":"🛡️ 一般管理者";
+  const superOnly=["#adminUsersPanel","#adminAuditPanel","#adminAnnouncementsPanel","#adminExchangePanel"];
+  superOnly.forEach(sel=>$(sel)?.classList.toggle("hidden",profile.role!=="superadmin"));
   const u=await sb.from("profiles").select("id,display_name,role,created_at").order("created_at",{ascending:false});
   $("#userList").innerHTML=(u.data||[]).map(x=>{
     const roleButtons=profile.role==="superadmin"&&x.id!==session.user.id?'<button data-role-user="'+x.id+'" data-role="admin">管理者</button><button class="secondary" data-role-user="'+x.id+'" data-role="user">一般</button>':"";
