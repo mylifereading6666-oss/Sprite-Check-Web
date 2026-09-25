@@ -60,6 +60,8 @@
     };
   }
 
+  window.loadEventRewardChats=loadChats;
+
   function init(){
     ensurePanel();
     ensureAdminPanel();
