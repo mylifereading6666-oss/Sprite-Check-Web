@@ -1,5 +1,3 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
-
 const SOURCE = "https://raw.githubusercontent.com/valincius/fn-sprites/main/src/sprites.json";
 const UPDATES = "https://spritechecklist.org/whats-new/";
 
@@ -63,11 +61,16 @@ export async function runSpriteSync(
   runType:"scheduled"|"manual",
   actorId:string|null
 ){
-  const started=await supabaseAdmin.from("sprite_sync_runs")
-    .insert({run_type:runType,triggered_by:actorId,status:"running"})
-    .select("id").single();
-  if(started.error) throw started.error;
-  const runId=started.data.id;
+  let runId:string|null=null;
+  try{
+    const started=await supabaseAdmin.from("sprite_sync_runs")
+      .insert({run_type:runType,triggered_by:actorId,status:"running"})
+      .select("id").single();
+    if(!started.error) runId=started.data?.id??null;
+    else console.warn("sprite_sync_runs start log failed:",started.error.message);
+  }catch(error){
+    console.warn("sprite_sync_runs start log exception:",error);
+  }
   try{
     const incoming=await fetchCatalog();
     const {data:existing,error:readError}=await supabaseAdmin
@@ -122,7 +125,7 @@ export async function runSpriteSync(
           sprite_id:x.source_key
         }));
         const ar=await supabaseAdmin.from("announcements").insert(announcements);
-        if(ar.error) throw ar.error;
+        if(ar.error) console.warn("sprite announcements insert failed:",ar.error.message);
 
         const users=await supabaseAdmin.from("profiles").select("id");
         if(!users.error && users.data?.length){
@@ -133,23 +136,30 @@ export async function runSpriteSync(
             body:`${xNameList(newRows)}`,
             body_en:`${xNameList(newRows)}`
           }));
-          await supabaseAdmin.from("notifications").insert(ns);
+          const nr=await supabaseAdmin.from("notifications").insert(ns);
+          if(nr.error) console.warn("sprite notifications insert failed:",nr.error.message);
         }
       }
     }
 
-    await supabaseAdmin.from("sprite_sync_runs").update({
-      finished_at:new Date().toISOString(),status:"success",
-      new_count:newRows.length,updated_count:updates.length,
-      unchanged_count:unchanged,details:{source:SOURCE,updates_source:UPDATES}
-    }).eq("id",runId);
+    if(runId){
+      const log=await supabaseAdmin.from("sprite_sync_runs").update({
+        finished_at:new Date().toISOString(),status:"success",
+        new_count:newRows.length,updated_count:updates.length,
+        unchanged_count:unchanged,details:{source:SOURCE,updates_source:UPDATES}
+      }).eq("id",runId);
+      if(log.error) console.warn("sprite_sync_runs success log failed:",log.error.message);
+    }
 
     return {ok:true,run_id:runId,new_count:newRows.length,updated_count:updates.length,unchanged_count:unchanged,total:incoming.length};
   }catch(error){
-    await supabaseAdmin.from("sprite_sync_runs").update({
-      finished_at:new Date().toISOString(),status:"failed",
-      error_text:error instanceof Error?error.message:String(error)
-    }).eq("id",runId);
+    if(runId){
+      const log=await supabaseAdmin.from("sprite_sync_runs").update({
+        finished_at:new Date().toISOString(),status:"failed",
+        error_text:error instanceof Error?error.message:String(error)
+      }).eq("id",runId);
+      if(log.error) console.warn("sprite_sync_runs failure log failed:",log.error.message);
+    }
     throw error;
   }
 }
