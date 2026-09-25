@@ -52,6 +52,7 @@
 <section class="page-section" id="settingsPage"><section class="panel"><h2 id="cloudTitle">データ・バックアップ</h2>
 <div class="row"><button id="cloudSync">☁️ 今すぐ同期</button><button id="export">バックアップ出力</button><label><button type="button" class="secondary" onclick="document.getElementById('restore').click()">バックアップ復元</button><input id="restore" type="file" accept=".json" hidden></label><button id="reset" class="danger">データリセット</button></div>
 <p id="apiStatus">サーバーへ自動接続しています…</p></section>
+<section class="panel"><h2>🔄 アカウント移行・メール変更</h2><p>現在のアカウントを維持したまま、新しいメールアドレスへ変更できます。本人確認のため現在のパスワードを入力してください。</p><div class="row"><input id="migrationPassword" type="password" placeholder="現在のパスワード"><input id="migrationEmail" type="email" placeholder="新しいメールアドレス"><button id="migrateAccount">本人確認してメール変更</button></div><small id="migrationStatus"></small></section>
 <section class="panel"><h2>🌐 Language / 言語</h2><div class="row"><button id="langJa">🇯🇵 日本語</button><button id="langEn">🇺🇸 English</button></div><label><input id="autoTranslate" type="checkbox"> チャット自動翻訳 / Auto-translate chats</label></section>
 <section class="panel"><h2 id="exportTitle">チェックリスト出力</h2><div class="row"><button id="exportChecklist">現在のチェックリストを画像保存</button><button id="requestNotification" class="secondary">ブラウザ通知を確認</button></div><p id="notificationStatus"></p></section></section>
 </div>
