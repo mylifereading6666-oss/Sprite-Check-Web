@@ -15,7 +15,7 @@ export default {
     if(req.method!=="POST")return Response.json({error:"POST required"},{status:405,headers:corsHeaders});
     const admin=adminClient();
     const me=await admin.from("profiles").select("id,role").eq("id",ctx.userClaims?.sub).maybeSingle();
-    if(!["admin","superadmin"].includes(me.data?.role||""))return Response.json({error:"Admin only"},{status:403,headers:corsHeaders});
+    if(me.data?.role!=="superadmin")return Response.json({error:"Superadmin only"},{status:403,headers:corsHeaders});
     const users=await admin.auth.admin.listUsers({page:1,perPage:1000});
     if(users.error)return Response.json({error:users.error.message},{status:500,headers:corsHeaders});
     const profiles=await admin.from("profiles").select("id,display_name,role,created_at");
