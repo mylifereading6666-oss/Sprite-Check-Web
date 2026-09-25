@@ -209,6 +209,26 @@ $("#cloudSync").onclick=async()=>{if(!sb||!session)return setApiStatus(t("ログ
 $("#signUp").onclick=async()=>{if(!sb)return alert(t("サーバーへ接続中です。少し待ってから再試行してください。","Connecting to the server. Please try again shortly."));const {error}=await sb.auth.signUp({email:$("#email").value.trim(),password:$("#password").value});if(error)alert(error.message);else alert(t("登録処理を開始しました。メール確認が必要な設定では確認メールを確認してください。","Sign-up started. Check your email if confirmation is enabled."))};
 $("#signIn").onclick=async()=>{if(!sb)return alert(t("サーバーへ接続中です。少し待ってから再試行してください。","Connecting to the server. Please try again shortly."));const {error}=await sb.auth.signInWithPassword({email:$("#email").value.trim(),password:$("#password").value});if(error)alert(error.message)};
 $("#signOut").onclick=async()=>{if(sb)await sb.auth.signOut();session=null;profile=null;renderAuth();renderAdmin()};
+$("#migrateAccount")?.addEventListener("click",async()=>{
+  if(!sb||!session)return alert(t("先にログインしてください。","Please sign in first."));
+  const currentPassword=$("#migrationPassword")?.value||"";
+  const newEmail=$("#migrationEmail")?.value.trim().toLowerCase()||"";
+  const status=$("#migrationStatus");
+  if(!currentPassword||!newEmail)return alert(t("現在のパスワードと新しいメールアドレスを入力してください。","Enter your current password and new email address."));
+  if(newEmail===session.user.email?.toLowerCase())return alert(t("現在と同じメールアドレスです。","That is already your current email."));
+  try{
+    status.textContent=t("本人確認中…","Verifying identity…");
+    const verify=await sb.auth.signInWithPassword({email:session.user.email,password:currentPassword});
+    if(verify.error)throw verify.error;
+    const changed=await sb.auth.updateUser({email:newEmail});
+    if(changed.error)throw changed.error;
+    status.textContent=t("確認メールを送信しました。新しいメールアドレスで確認を完了してください。Spriteデータは同じアカウントIDに保持されます。","A verification email was sent. Complete verification at the new address. Your Sprite data remains attached to the same account.");
+    $("#migrationPassword").value="";$("#migrationEmail").value="";
+  }catch(e){
+    status.textContent="";
+    alert(e.message||String(e));
+  }
+});
 
 function renderExchangeSprites(){const e=$("#exchangeSprite");if(!e)return;const current=e.value;e.innerHTML=sprites.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join("");if(current)e.value=current}
 function activateTab(name){$$(".tab-content").forEach(x=>x.classList.add("hidden"));$("#"+name+"Tab").classList.remove("hidden")}
@@ -629,8 +649,9 @@ async function syncOfflineChanges(){
   if(!pending.length)return;
   const remaining=[];
   for(const row of pending){
-    const {error}=await sb.from("sprite_state").upsert(row,{onConflict:"user_id,sprite_id"});
-    if(error)remaining.push(row);
+    const payload={...row,user_id:session.user.id};
+    const {error}=await sb.from("sprite_state").upsert(payload,{onConflict:"user_id,sprite_id"});
+    if(error)remaining.push(payload);
   }
   localStorage.setItem("sprite-check-pending-v1",JSON.stringify(remaining));
   if(!remaining.length) setApiStatus(t("☁️ オフライン変更を同期しました。","☁️ Offline changes synchronized."));
