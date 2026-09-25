@@ -935,3 +935,236 @@ using (bucket_id='support' and (public.is_admin() or owner_id=(select auth.uid()
 
 -- Keep historical user ownership data even if an administrator removes a catalog row.
 alter table public.sprite_state drop constraint if exists sprite_state_sprite_fk;
+
+
+-- ============================================================
+-- Inquiry routing: superadmin first, then pass to general admins.
+-- ============================================================
+alter table public.inquiries
+  add column if not exists support_state text not null default 'superadmin_queue',
+  add column if not exists assigned_admin_id uuid references public.profiles(id) on delete set null,
+  add column if not exists assigned_at timestamptz,
+  add column if not exists passed_by uuid references public.profiles(id) on delete set null,
+  add column if not exists passed_at timestamptz;
+
+alter table public.inquiries
+  drop constraint if exists inquiries_support_state_check;
+alter table public.inquiries
+  add constraint inquiries_support_state_check
+  check (support_state in ('superadmin_queue','superadmin_handling','general_queue','general_handling','answered','closed'));
+
+create index if not exists inquiries_support_state_idx on public.inquiries(support_state,created_at desc);
+create index if not exists inquiries_assigned_admin_idx on public.inquiries(assigned_admin_id,created_at desc);
+
+create table if not exists public.admin_presence (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  last_seen_at timestamptz not null default now()
+);
+alter table public.admin_presence enable row level security;
+drop policy if exists admin_presence_admin_read on public.admin_presence;
+create policy admin_presence_admin_read on public.admin_presence
+  for select using (public.is_admin());
+grant select on public.admin_presence to authenticated;
+
+-- Only signed-in administrators may update their own heartbeat.
+create or replace function public.admin_heartbeat()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not exists (
+    select 1 from public.profiles
+    where id = (select auth.uid()) and role in ('admin','superadmin')
+  ) then
+    raise exception 'Admin only';
+  end if;
+  insert into public.admin_presence(user_id,last_seen_at)
+  values ((select auth.uid()),now())
+  on conflict (user_id) do update set last_seen_at=excluded.last_seen_at;
+end;
+$$;
+revoke execute on function public.admin_heartbeat() from public, anon;
+grant execute on function public.admin_heartbeat() to authenticated;
+
+-- New inquiries always enter the superadmin queue first.
+create or replace function public.notify_new_inquiry()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.inquiries
+    set support_state='superadmin_queue'
+  where id=new.id;
+
+  insert into public.notifications(user_id,title,body)
+  select p.id,
+         '新しい問い合わせがあります',
+         new.subject
+  from public.profiles p
+  where p.role='superadmin';
+  return new;
+end;
+$$;
+
+ drop trigger if exists inquiry_superadmin_route on public.inquiries;
+create trigger inquiry_superadmin_route
+after insert on public.inquiries
+for each row execute function public.notify_new_inquiry();
+
+-- Claim an inquiry for the current administrator.
+create or replace function public.claim_inquiry(p_inquiry_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  me_role text;
+  q public.inquiries%rowtype;
+  new_state text;
+begin
+  select role into me_role from public.profiles where id=(select auth.uid());
+  if me_role is null or me_role not in ('admin','superadmin') then raise exception 'Admin only'; end if;
+  select * into q from public.inquiries where id=p_inquiry_id for update;
+  if not found then raise exception 'Inquiry not found'; end if;
+  if q.status in ('answered','closed') then raise exception 'Inquiry is already closed'; end if;
+
+  if me_role='superadmin' then
+    new_state='superadmin_handling';
+  else
+    if q.assigned_admin_id is not null and q.assigned_admin_id <> (select auth.uid()) then
+      raise exception 'Inquiry is assigned to another administrator';
+    end if;
+    if q.support_state not in ('general_queue','general_handling') then
+      raise exception 'This inquiry is waiting for the superadmin';
+    end if;
+    new_state='general_handling';
+  end if;
+
+  update public.inquiries
+    set assigned_admin_id=(select auth.uid()), assigned_at=now(), support_state=new_state
+  where id=p_inquiry_id;
+
+  insert into public.audit_logs(actor_id,target_user_id,action,details)
+  values ((select auth.uid()),q.user_id,'inquiry_claim',jsonb_build_object('inquiry_id',p_inquiry_id,'state',new_state));
+  return jsonb_build_object('ok',true,'assigned_admin_id',(select auth.uid()),'support_state',new_state);
+end;
+$$;
+revoke execute on function public.claim_inquiry(uuid) from public, anon;
+grant execute on function public.claim_inquiry(uuid) to authenticated;
+
+-- Superadmin passes the inquiry to an online general admin when possible.
+create or replace function public.pass_inquiry_to_admin(p_inquiry_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  me_role text;
+  q public.inquiries%rowtype;
+  target_id uuid;
+begin
+  select role into me_role from public.profiles where id=(select auth.uid());
+  if me_role <> 'superadmin' then raise exception 'Superadmin only'; end if;
+  select * into q from public.inquiries where id=p_inquiry_id for update;
+  if not found then raise exception 'Inquiry not found'; end if;
+  if q.status in ('answered','closed') then raise exception 'Inquiry is already closed'; end if;
+
+  select p.id into target_id
+  from public.profiles p
+  join public.admin_presence ap on ap.user_id=p.id
+  where p.role='admin'
+    and p.id <> (select auth.uid())
+    and ap.last_seen_at >= now()-interval '2 minutes'
+  order by ap.last_seen_at desc
+  limit 1;
+
+  update public.inquiries
+    set assigned_admin_id=target_id,
+        assigned_at=case when target_id is null then null else now() end,
+        passed_by=(select auth.uid()),
+        passed_at=now(),
+        support_state=case when target_id is null then 'general_queue' else 'general_handling' end
+  where id=p_inquiry_id;
+
+  if target_id is not null then
+    insert into public.notifications(user_id,title,body)
+    values (target_id,'問い合わせが割り当てられました',q.subject);
+  else
+    insert into public.notifications(user_id,title,body)
+    select p.id,'一般管理者向けの問い合わせが待機しています',q.subject
+    from public.profiles p where p.role='admin';
+  end if;
+
+  insert into public.audit_logs(actor_id,target_user_id,action,details)
+  values ((select auth.uid()),q.user_id,'inquiry_pass',jsonb_build_object('inquiry_id',p_inquiry_id,'assigned_admin_id',target_id));
+  return jsonb_build_object('ok',true,'assigned_admin_id',target_id,'queued',target_id is null);
+end;
+$$;
+revoke execute on function public.pass_inquiry_to_admin(uuid) from public, anon;
+grant execute on function public.pass_inquiry_to_admin(uuid) to authenticated;
+
+create or replace function public.set_inquiry_status(p_inquiry_id uuid,p_status text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  me_role text;
+  q public.inquiries%rowtype;
+begin
+  select role into me_role from public.profiles where id=(select auth.uid());
+  if me_role is null or me_role not in ('admin','superadmin') then raise exception 'Admin only'; end if;
+  if p_status not in ('open','answered','closed') then raise exception 'Invalid status'; end if;
+  select * into q from public.inquiries where id=p_inquiry_id for update;
+  if not found then raise exception 'Inquiry not found'; end if;
+  if me_role='admin' and q.assigned_admin_id <> (select auth.uid()) then raise exception 'Not assigned to this administrator'; end if;
+  update public.inquiries
+    set status=p_status,
+        support_state=case when p_status='closed' then 'closed' when p_status='answered' then 'answered' else support_state end
+  where id=p_inquiry_id;
+  insert into public.audit_logs(actor_id,target_user_id,action,details)
+  values ((select auth.uid()),q.user_id,'inquiry_status',jsonb_build_object('inquiry_id',p_inquiry_id,'status',p_status));
+  return jsonb_build_object('ok',true);
+end;
+$$;
+revoke execute on function public.set_inquiry_status(uuid,text) from public, anon;
+grant execute on function public.set_inquiry_status(uuid,text) to authenticated;
+
+-- Route inquiry rows according to the support owner instead of exposing all inquiries to every admin.
+drop policy if exists inquiries_read on public.inquiries;
+create policy inquiries_read on public.inquiries for select using (
+  user_id=(select auth.uid())
+  or exists(select 1 from public.profiles p where p.id=(select auth.uid()) and p.role='superadmin')
+  or exists(select 1 from public.profiles p where p.id=(select auth.uid()) and p.role='admin'
+      and (assigned_admin_id=(select auth.uid()) or support_state='general_queue'))
+);
+drop policy if exists inquiries_update on public.inquiries;
+create policy inquiries_update on public.inquiries for update using (
+  user_id=(select auth.uid())
+  or exists(select 1 from public.profiles p where p.id=(select auth.uid()) and p.role='superadmin')
+  or exists(select 1 from public.profiles p where p.id=(select auth.uid()) and p.role='admin' and assigned_admin_id=(select auth.uid()))
+);
+drop policy if exists inquiry_messages_read on public.inquiry_messages;
+create policy inquiry_messages_read on public.inquiry_messages for select using (
+  exists(select 1 from public.inquiries i where i.id=inquiry_id and (
+    i.user_id=(select auth.uid())
+    or exists(select 1 from public.profiles p where p.id=(select auth.uid()) and p.role='superadmin')
+    or exists(select 1 from public.profiles p where p.id=(select auth.uid()) and p.role='admin'
+       and (i.assigned_admin_id=(select auth.uid()) or i.support_state='general_queue'))
+  ))
+);
+drop policy if exists inquiry_messages_insert on public.inquiry_messages;
+create policy inquiry_messages_insert on public.inquiry_messages for insert with check (
+  sender_id=(select auth.uid()) and exists(select 1 from public.inquiries i where i.id=inquiry_id and (
+    i.user_id=(select auth.uid())
+    or exists(select 1 from public.profiles p where p.id=(select auth.uid()) and p.role='superadmin')
+    or exists(select 1 from public.profiles p where p.id=(select auth.uid()) and p.role='admin' and i.assigned_admin_id=(select auth.uid()))
+  ))
+);
