@@ -82,7 +82,7 @@ async function syncSprites(force=false){
         localStorage.setItem(DATA_KEY,JSON.stringify(sprites));
         localStorage.setItem(DATA_TIME_KEY,String(now));
         localStorage.setItem("sprite-check-last-source-v2",JSON.stringify({checked_at:now,source:"Supabase canonical sprites",count:sprites.length}));
-        render();renderNews();renderUserNotifications();
+        render();renderNews();renderUserNotifications();notifyNewSprites();
         return {ok:true,count:sprites.length,time:now,source:"Supabase canonical Sprite catalog"};
       }
     }catch(err){console.warn("canonical catalog unavailable",err)}
@@ -108,7 +108,7 @@ async function syncSprites(force=false){
     sprites=final;
     localStorage.setItem(DATA_KEY,JSON.stringify(sprites));
     localStorage.setItem(DATA_TIME_KEY,String(now));
-    render();renderNews();
+    render();renderNews();notifyNewSprites();
     return{ok:true,count:sprites.length,time:now,source:"公開データ（オフライン準備用）"};
   }catch(e){
     if(cached)try{sprites=JSON.parse(cached);render();return{ok:true,count:sprites.length,time:stamp,source:"保存済みオフラインデータ"}}catch{}
@@ -126,7 +126,7 @@ async function renderUserNotifications(){
   box.innerHTML=(r.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.title)+'</b><small>'+esc(x.body)+' · '+timeText(x.created_at)+(x.read?"":" · 未読")+'</small><button data-read="'+x.id+'">'+(x.read?"既読":"既読にする")+'</button></div>').join("")||"<p>通知はありません。</p>";
   $$("[data-read]").forEach(b=>b.onclick=async()=>{await sb.from("notifications").update({read:true}).eq("id",b.dataset.read).eq("user_id",session.user.id);renderUserNotifications()});
 }
-function renderNews(){const box=$("#newsList");if(!box)return;const upcoming=sprites.filter(s=>s.status==="upcoming").slice(0,30);const released=sprites.filter(s=>s.isNew&&s.status==="released").slice(0,20);const source=localStorage.getItem("sprite-check-last-source-v1");let meta="";try{const m=JSON.parse(source||"{}");if(m.checked_at)meta="<small>最終確認: "+timeText(m.checked_at)+"</small>"}catch{}box.innerHTML=(released.length?'<div class="list-item"><b>🆕 新しく確認されたSprite</b><small>'+released.map(x=>esc(x.name)).join("、")+'</small></div>':"")+(upcoming.length?'<div class="list-item"><b>⏳ 登場予定</b><small>'+upcoming.map(x=>esc(x.name)+(x.releaseDate?" · "+esc(x.releaseDate):"")).join("、")+'</small></div>':"")+'<div class="list-item"><b>自動データ更新</b><small>機械可読カタログと信頼済み更新情報を定期確認します。'+meta+'</small></div>'}
+function renderNews(){const box=$("#newsList");if(!box)return;const upcoming=sprites.filter(s=>s.status==="upcoming").slice(0,30);const released=sprites.filter(s=>s.isNew&&s.status==="released").slice(0,20);const source=localStorage.getItem("sprite-check-last-source-v2");let meta="";try{const m=JSON.parse(source||"{}");if(m.checked_at)meta="<small>最終確認: "+timeText(m.checked_at)+"</small>"}catch{}box.innerHTML=(released.length?'<div class="list-item"><b>🆕 新しく確認されたSprite</b><small>'+released.map(x=>esc(x.name)).join("、")+'</small></div>':"")+(upcoming.length?'<div class="list-item"><b>⏳ 登場予定</b><small>'+upcoming.map(x=>esc(x.name)+(x.releaseDate?" · "+esc(x.releaseDate):"")).join("、")+'</small></div>':"")+'<div class="list-item"><b>自動データ更新</b><small>機械可読カタログと信頼済み更新情報を定期確認します。'+meta+'</small></div>'}
 function render(){
   const q=($("#search")?.value||"").toLowerCase(),f=$("#filter")?.value||"all",season=$("#seasonFilter")?.value||"all";
   const filtered=sprites.filter(s=>(!q||s.name.toLowerCase().includes(q))&&(season==="all"||s.season===season)&&(f==="all"||(f==="owned"&&item(s.id).owned)||(f==="unowned"&&!item(s.id).owned)||(f==="master"&&item(s.id).master)||(f==="upcoming"&&s.status==="upcoming")||(f==="new"&&s.isNew)));
