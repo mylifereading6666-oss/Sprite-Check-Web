@@ -34,15 +34,15 @@
 
 <section class="page-section" id="adminPage"><section class="panel hidden" id="adminPanel"><h2>管理者</h2>
 <div class="admin-grid">
-<div><h3>👥 ユーザー管理</h3><div id="userList" class="list"></div></div>
-<div><h3>📜 監査ログ</h3><div id="auditList" class="list"></div></div>
+<div id="adminUsersPanel"><h3>👥 ユーザー管理</h3><div id="userList" class="list"></div></div>
+<div id="adminAuditPanel"><h3>📜 監査ログ</h3><div id="auditList" class="list"></div></div>
 </div>
 <div class="panel admin-tools">
 <h3>📢 通知</h3><div class="row"><input id="adminNoticeTitle" placeholder="通知タイトル"><input id="adminNoticeBody" placeholder="通知内容" style="flex:1"><input id="adminNoticeImage" type="url" placeholder="画像URL（任意）"><button id="adminBroadcast">全ユーザーへ通知</button></div>
 <div class="row"><input id="adminAnnouncementTitle" placeholder="お知らせタイトル"><input id="adminAnnouncementTitleEn" placeholder="English title"><input id="adminAnnouncementBody" placeholder="本文" style="flex:1"><input id="adminAnnouncementBodyEn" placeholder="English body" style="flex:1"><input id="adminAnnouncementImage" type="url" placeholder="画像URL（任意）"><input id="adminAnnouncementFile" type="file" accept="image/*"><input id="adminAnnouncementSource" type="url" placeholder="出典URL（任意）"><button id="adminPostAnnouncement">お知らせを投稿</button></div>
 <div id="adminAnnouncementList" class="list"></div>
 </div>
-<div class="panel admin-tools"><h3>🤝 交換管理</h3><div id="adminExchangeList" class="list"></div></div>
+<div class="panel admin-tools" id="adminExchangePanel"><h3>🤝 交換管理</h3><div id="adminExchangeList" class="list"></div></div>
 <div class="panel admin-tools"><h3>💬 問い合わせ管理</h3><div id="adminInquiryList" class="list"></div></div>
 <div class="panel admin-tools"><h3>🛡️ 管理者登録</h3><div class="row"><input id="adminRegistrationCode" placeholder="週間管理者登録コード"><button id="registerAdmin">管理者として登録</button></div><small>コードはサーバー側で管理され、完成版ではアプリ本体に埋め込みません。</small></div>
 <div id="superadminTools" class="panel admin-tools hidden"><h3>👑 最上位管理者設定</h3><div class="row"><button id="generateAdminCode">今週の管理者登録コードを生成</button><button id="adminRoleHistory">管理者権限履歴</button></div><div id="adminRoleHistoryList" class="list"></div></div>
