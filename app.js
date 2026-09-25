@@ -239,13 +239,43 @@ $("#requestNotification").onclick=()=>$("#notifyNew").click();
 
 function setApiStatus(s){const e=$("#apiStatus");if(e)e.textContent=s}
 async function connectSupabase(){
+  const withTimeout=(promise,ms,label)=>Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error(label+" timeout")),ms))
+  ]);
   try{
     if(!window.supabase)throw new Error("Supabase client library is not loaded");
-    sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
-    const {data,error}=await sb.auth.getSession();if(error)throw error;session=data.session;
-    sb.auth.onAuthStateChange(async(_e,s)=>{session=s;await loadProfile();renderAuth();renderNews();renderUserNotifications();if(session)await cloudPullState();await renderAnnouncements();await autoAnnounceNewSprites();});
-    await loadProfile();renderNews();renderUserNotifications();renderAnnouncements();setApiStatus(t("✅ Supabaseに接続しました。","✅ Connected to Supabase."));renderAuth();if(session)await cloudPullState();
-  }catch(e){sb=null;session=null;setApiStatus("⚠️ "+e.message)}
+    sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{
+      auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
+    });
+    setApiStatus(t("☁️ Supabaseへ接続しています…","☁️ Connecting to Supabase…"));
+    const {data,error}=await withTimeout(sb.auth.getSession(),5000,"Supabase auth");
+    if(error)throw error;
+    session=data.session||null;
+    sb.auth.onAuthStateChange(async(_e,s)=>{
+      session=s;
+      try{await withTimeout(loadProfile(),5000,"Profile")}catch(e){console.warn("profile load",e)}
+      renderAuth();renderNews();
+      renderUserNotifications().catch(e=>console.warn("notifications",e));
+      if(session)cloudPullState().catch(e=>console.warn("cloud pull",e));
+      renderAnnouncements().catch(e=>console.warn("announcements",e));
+      autoAnnounceNewSprites().catch(e=>console.warn("auto announce",e));
+    });
+    try{await withTimeout(loadProfile(),5000,"Profile")}catch(e){console.warn("profile load",e)}
+    renderNews();
+    renderAuth();
+    setApiStatus(t("✅ Supabase接続済み","✅ Supabase connected"));
+    renderUserNotifications().catch(e=>console.warn("notifications",e));
+    renderAnnouncements().catch(e=>console.warn("announcements",e));
+    if(session)cloudPullState().catch(e=>console.warn("cloud pull",e));
+  }catch(e){
+    sb=null;session=null;
+    setApiStatus(t(
+      "⚠️ サーバー接続がタイムアウトしました。端末内モードで利用できます。",
+      "⚠️ Server connection timed out. Local device mode is available."
+    ));
+    renderAuth();
+  }
 }
 async function loadProfile(){profile=null;if(!sb||!session){renderAuth();return}const {data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).maybeSingle();if(error)throw error;if(data)profile=data;else{const name=$("#displayName").value.trim()||session.user.email.split("@")[0];const ins=await sb.from("profiles").insert({id:session.user.id,display_name:name,role:"user"}).select().single();if(!ins.error)profile=ins.data}renderAdmin();startAdminHeartbeat()}
 async function cloudPullState(){
