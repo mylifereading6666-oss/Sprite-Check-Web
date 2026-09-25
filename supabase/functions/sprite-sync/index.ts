@@ -1,6 +1,6 @@
 import { withSupabase } from "npm:@supabase/server@1";
 import { corsHeaders } from "../_shared/cors.ts";
-import { runSpriteSync, adminClient } from "../_shared/sprite-sync.ts";
+import { runSpriteSync } from "../_shared/sprite-sync.ts";
 
 export default {
   fetch: withSupabase({auth:"user"}, async (req,ctx)=>{
@@ -8,7 +8,7 @@ export default {
     if(req.method!=="POST") return Response.json({error:"POST required"},{status:405,headers:corsHeaders});
     if(!ctx.userClaims?.sub) return Response.json({error:"Authentication required"},{status:401,headers:corsHeaders});
 
-    const admin=adminClient();
+    const admin=ctx.supabaseAdmin;
     const {data:profile,error}=await admin.from("profiles").select("id,role")
       .eq("id",ctx.userClaims.sub).maybeSingle();
     if(error) return Response.json({error:error.message},{status:500,headers:corsHeaders});
