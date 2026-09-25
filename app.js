@@ -157,15 +157,45 @@ function render(){
 
 document.addEventListener("change",e=>{const id=e.target.dataset.id,k=e.target.dataset.k;if(id&&k){const x=item(id);x[k]=k==="level"?Math.max(1,Math.min(5,Number(e.target.value)||1)):e.target.checked;x.manual=true;x.updated_at=nowIso();save()}});
 function openPage(name){
-  const page=name==="sprites"?"spritesPage":name==="recognition"?"recognitionPage":name==="news"?"newsPage":name==="social"?"socialPage":name==="admin"?"adminPage":name==="account"?"accountPage":"settingsPage";
-  $(".page-section").forEach(x=>{if(x.id!=="adminPanel")x.classList.remove("active")});
-  const target=$("#"+page);if(target)target.classList.add("active");
-  $("#sideMenu").classList.remove("open");$("#menuBackdrop").classList.add("hidden");
-  if(name==="admin"&&!profile)openPage("account");
+  const pages={
+    sprites:"spritesPage",
+    recognition:"recognitionPage",
+    news:"newsPage",
+    social:"socialPage",
+    admin:"adminPage",
+    account:"accountPage",
+    settings:"settingsPage"
+  };
+  if(name==="admin"&&!profile){
+    name="account";
+  }
+  const targetId=pages[name]||"spritesPage";
+  document.querySelectorAll(".page-section").forEach(page=>{
+    page.classList.toggle("active",page.id===targetId);
+  });
+  const menu=$("#sideMenu");
+  const backdrop=$("#menuBackdrop");
+  if(menu)menu.classList.remove("open");
+  if(backdrop)backdrop.classList.add("hidden");
+  window.scrollTo({top:0,behavior:"smooth"});
 }
-$("#menuToggle").onclick=()=>{$("#sideMenu").classList.toggle("open");$("#menuBackdrop").classList.toggle("hidden",!$("#sideMenu").classList.contains("open"))};
-$("#menuBackdrop").onclick=()=>{$("#sideMenu").classList.remove("open");$("#menuBackdrop").classList.add("hidden")};
-$("[data-page]").forEach(b=>b.onclick=()=>openPage(b.dataset.page));
+function toggleMenu(force){
+  const menu=$("#sideMenu");
+  const backdrop=$("#menuBackdrop");
+  if(!menu||!backdrop)return;
+  const open=typeof force==="boolean"?force:!menu.classList.contains("open");
+  menu.classList.toggle("open",open);
+  backdrop.classList.toggle("hidden",!open);
+}
+$("#menuToggle").addEventListener("click",e=>{e.preventDefault();e.stopPropagation();toggleMenu()});
+$("#menuBackdrop").addEventListener("click",e=>{e.preventDefault();toggleMenu(false)});
+document.querySelectorAll("[data-page]").forEach(button=>{
+  button.addEventListener("click",e=>{
+    e.preventDefault();
+    e.stopPropagation();
+    openPage(button.dataset.page);
+  });
+});
 $("#search").addEventListener("input",render);$("#filter").addEventListener("change",render);$("#seasonFilter").addEventListener("change",render);
 $("#theme").onclick=()=>{document.body.classList.toggle("dark");localStorage.setItem("sprite-theme",document.body.classList.contains("dark")?"dark":"light")};
 $("#lang").onclick=()=>{lang=lang==="ja"?"en":"ja";localStorage.setItem("sprite-lang",lang);applyLanguage();render();renderAuth();renderSocial()};
