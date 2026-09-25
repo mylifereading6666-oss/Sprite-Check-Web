@@ -441,7 +441,7 @@ $("#exportChecklist").onclick=()=>{const w=1200,h=800,c=document.createElement("
 $("#sync").onclick=async()=>{const b=$("#sync");b.disabled=true;b.textContent=t("更新中…","Updating…");setSyncStatus(null);const info=await syncSprites(true);setSyncStatus(info);b.disabled=false;b.textContent=t("Spriteデータ更新","Update Sprite data")};
 if(localStorage.getItem("sprite-theme")==="dark")document.body.classList.add("dark");
 
-applyLanguage();renderAuth();render();renderExchangeSprites();renderNews();setSyncStatus(null);setApiStatus("☁️ サーバーへ自動接続しています…");
+document.body.classList.toggle("dark",localStorage.getItem("sprite-theme")==="dark");applyLanguage();renderAuth();render();renderExchangeSprites();renderNews();setSyncStatus(null);setApiStatus("☁️ サーバーへ自動接続しています…");
 syncSprites(true).then(setSyncStatus);
 connectSupabase().catch(e=>setApiStatus("⚠️ "+e.message));
 openPage("sprites");
