@@ -238,6 +238,30 @@ $("#notifyNew").onclick=async()=>{if(!("Notification"in window))return alert(t("
 $("#requestNotification").onclick=()=>$("#notifyNew").click();
 
 function setApiStatus(s){const e=$("#apiStatus");if(e)e.textContent=s}
+async function diagnoseSupabase(){
+  const ctl=new AbortController();
+  const timer=setTimeout(()=>ctl.abort(),7000);
+  try{
+    const res=await fetch(SUPABASE_URL+"/rest/v1/sprites?select=source_key&limit=1",{
+      method:"GET",
+      headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:"Bearer "+SUPABASE_PUBLISHABLE_KEY},
+      cache:"no-store",
+      signal:ctl.signal
+    });
+    const body=await res.text();
+    if(!res.ok)throw new Error("REST "+res.status+" "+body.slice(0,300));
+    serverOnline=true;
+    setApiStatus(t("🟢 Supabaseオンライン接続OK","🟢 Supabase online connection OK"));
+    return true;
+  }catch(e){
+    serverOnline=false;
+    const msg=e?.name==="AbortError"?"通信が7秒でタイムアウトしました":(e?.message||String(e));
+    setApiStatus(t("🔴 オンライン接続失敗: "+msg,"🔴 Online connection failed: "+msg));
+    console.warn("Supabase diagnostic:",e);
+    return false;
+  }finally{clearTimeout(timer);}
+}
+
 async function connectSupabase(){
   const withTimeout=(promise,ms,label)=>Promise.race([
     promise,
@@ -264,7 +288,7 @@ async function connectSupabase(){
     try{await withTimeout(loadProfile(),5000,"Profile")}catch(e){console.warn("profile load",e)}
     renderNews();
     renderAuth();
-    setApiStatus(t("✅ Supabase接続済み","✅ Supabase connected"));
+    setApiStatus(t("🟢 Supabase接続済み（認証OK）","🟢 Supabase connected (auth OK)"));\n    diagnoseSupabase().catch(()=>{});
     renderUserNotifications().catch(e=>console.warn("notifications",e));
     renderAnnouncements().catch(e=>console.warn("announcements",e));
     if(session)cloudPullState().catch(e=>console.warn("cloud pull",e));
