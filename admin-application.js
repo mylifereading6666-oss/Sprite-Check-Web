@@ -48,7 +48,13 @@
     const list=q("#adminApplicationsList");if(!list||typeof sb==="undefined"||!sb)return;
     const r=await sb.from("admin_applications").select("id,user_id,reason,status,review_note,created_at,reviewed_at").order("created_at",{ascending:false});
     if(r.error){list.innerHTML='<div class="list-item">'+esc(r.error.message)+'</div>';return}
-    list.innerHTML=(r.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.user_id)+'</b><small>'+esc(x.reason)+'</small><small>'+({pending:"審査中",approved:"承認済み",rejected:"不承認",withdrawn:"取り下げ"}[x.status]||x.status)+' · '+new Date(x.created_at).toLocaleString()+'</small>'+(x.status==="pending"?'<div class="row"><button data-app-review="approved" data-app-id="'+esc(x.id)+'">承認</button><button class="danger" data-app-review="rejected" data-app-id="'+esc(x.id)+'">不承認</button></div>':"")+'</div>').join("")||'<small>申請なし</small>';
+    list.innerHTML=(r.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.user_id)+'</b><small>'+esc(x.reason)+'</small><small>'+({pending:"審査中",approved:"承認済み",rejected:"不承認",withdrawn:"取り下げ"}[x.status]||x.status)+' · '+new Date(x.created_at).toLocaleString()+'</small>'+(x.status==="pending"?'<div class="row"><button data-app-review="approved" data-app-id="'+esc(x.id)+'">承認</button><button class="danger" data-app-review="rejected" data-app-id="'+esc(x.id)+'">不承認</button></div>':x.status==="approved"?'<div class="row"><button data-app-promote="'+esc(x.id)+'">👑 一般管理者にする</button></div>':"")+'</div>').join("")||'<small>申請なし</small>';
+    list.querySelectorAll("[data-app-promote]").forEach(b=>b.onclick=async()=>{
+      if(!confirm(tx("この申請者を一般管理者にしますか？","Promote this applicant to general admin?")))return;
+      const r=await sb.rpc("promote_approved_admin_application",{p_application_id:b.dataset.appPromote});
+      if(r.error)alert(r.error.message);
+      else{alert(tx("一般管理者に変更しました。","User is now a general admin."));await loadAll();}
+    });
     list.querySelectorAll("[data-app-review]").forEach(b=>b.onclick=async()=>{
       const note=prompt(tx("審査メモ（任意）","Review note (optional)"),"");if(note===null)return;
       const r=await sb.rpc("admin_review_application",{p_application_id:b.dataset.appId,p_status:b.dataset.appReview,p_note:note});
