@@ -56,6 +56,23 @@
 <section class="panel"><h2>🌐 Language / 言語</h2><div class="row"><button id="langJa">🇯🇵 日本語</button><button id="langEn">🇺🇸 English</button></div><label><input id="autoTranslate" type="checkbox"> チャット自動翻訳 / Auto-translate chats</label></section>
 <section class="panel"><h2 id="exportTitle">チェックリスト出力</h2><div class="row"><button id="exportChecklist">現在のチェックリストを画像保存</button><button id="requestNotification" class="secondary">ブラウザ通知を確認</button></div><p id="notificationStatus"></p></section></section>
 </div>
+<script>
+(async()=>{
+  try{
+    if("serviceWorker" in navigator && !sessionStorage.getItem("sprite-check-sw-cleaned-v2")){
+      const regs=await navigator.serviceWorker.getRegistrations();
+      if(regs.length){
+        sessionStorage.setItem("sprite-check-sw-cleaned-v2","1");
+        await Promise.all(regs.map(r=>r.unregister()));
+        const keys=await caches.keys();
+        await Promise.all(keys.map(k=>caches.delete(k)));
+        location.reload();
+        return;
+      }
+    }
+  }catch(e){console.warn("service worker cleanup",e)}
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="./data/sprites.js"></script><script src="./app.js?v=20260925-5"></script><script src="./points-vip.js?v=20260925-2"></script><script src="./events-points.js?v=20260925-1"></script><script src="./event-reward-chat.js?v=20260925-1"></script><script src="./chat-realtime.js?v=20260925-1"></script><script src="./admin-application.js?v=20260925-1"></script>
