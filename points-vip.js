@@ -19,10 +19,7 @@
       '</div>'+
       '<div class="row" style="margin-top:12px"><button id="claimDailyPoints">🎁 今日の無料ポイントを受け取る</button><span id="pointsStatus"></span></div>'+
       '<p>ポイントは失効しません。無料ポイントの獲得履歴とVIP状態はサーバーで管理されます。</p>'+
-      '<hr><h3>🎡 ポイントルーレット</h3>'+
-      '<p>1回10ポイント。通常は1日1回、VIPは1日3回まで利用できます。景品はSprite Check内のポイント報酬です。</p>'+
-      '<div class="row"><button id="spinPointRoulette">🎡 ルーレットを回す</button><span id="rouletteStatus"></span></div>'+
-      '<div id="rouletteResult" class="list"></div>';
+
     settings.appendChild(sec);
   }
 
@@ -128,7 +125,6 @@
   function init(){
     ensurePointsPanel();
     q("#claimDailyPoints")?.addEventListener("click",claimDaily);
-    q("#spinPointRoulette")?.addEventListener("click",spinRoulette);
     loadPoints().catch(()=>{});
     const observer=new MutationObserver(()=>addAdminControls());
     const list=q("#userList");if(list)observer.observe(list,{childList:true,subtree:true});
