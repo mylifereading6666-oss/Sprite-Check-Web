@@ -666,7 +666,15 @@ async function invokeSuperadminSpriteSync(){
     await syncSprites(true);
     await renderAnnouncements();
   }catch(err){
-    alert(t("Sprite更新に失敗しました。","Sprite update failed.")+"\\n"+(err.message||err));
+    let detail=err?.message||String(err);
+    try{
+      const response=err?.context;
+      if(response?.clone){
+        const body=await response.clone().json().catch(()=>null);
+        if(body?.error) detail=body.error;
+      }
+    }catch{}
+    alert(t("Sprite更新に失敗しました。","Sprite update failed.")+"\\n"+detail);
   }finally{
     if(b){b.disabled=false;b.textContent=t("👑 Spriteを今すぐ更新","👑 Update Sprites now")}
     updateFinalRoleUi();
