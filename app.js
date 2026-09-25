@@ -31,7 +31,7 @@ window.addEventListener("unhandledrejection",e=>{
   console.error("sprite-check-unhandled-rejection",e.reason);
 });
 const $=s=>document.querySelector(s);
-const $=s=>[...document.querySelectorAll(s)];
+const $$=s=>[...document.querySelectorAll(s)];
 function initCoreUI(){
   const menuToggle=$("#menuToggle");
   const menuBackdrop=$("#menuBackdrop");
