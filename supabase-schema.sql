@@ -1289,3 +1289,14 @@ create policy sprite_state_update_self on public.sprite_state for update using (
   user_id=(select auth.uid())
   or exists(select 1 from public.profiles p where p.id=(select auth.uid()) and p.role='superadmin')
 );
+
+
+create policy sprite_state_insert_self on public.sprite_state for insert with check (
+  user_id=(select auth.uid())
+  or exists(select 1 from public.profiles p where p.id=(select auth.uid()) and p.role='superadmin')
+);
+drop policy if exists sprite_state_delete_self on public.sprite_state;
+create policy sprite_state_delete_self on public.sprite_state for delete using (
+  user_id=(select auth.uid())
+  or exists(select 1 from public.profiles p where p.id=(select auth.uid()) and p.role='superadmin')
+);
