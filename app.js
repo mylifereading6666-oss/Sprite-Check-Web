@@ -134,8 +134,13 @@ function render(){
   const labels={c7s4:"Chapter 7 Season 4 · Override",c7s3:"Chapter 7 Season 3 · Runners",unknown:"その他"};
   const html=Object.entries(groups).map(([sn,list])=>'<section class="season-group"><h2>'+esc(labels[sn]||sn)+'</h2><div class="grid">'+list.map(s=>{const x=item(s.id);return '<article class="card"><img class="sprite-img" src="'+esc(s.imageUrl||"")+'" alt="'+esc(s.name)+'" loading="lazy" onerror="this.style.display=\'none\'"><h3>'+esc(s.name)+'</h3><div class="row"><span class="badge">'+esc(s.status)+'</span>'+(s.isNew?'<span class="badge">NEW</span>':'')+'</div><p><label><input type="checkbox" data-id="'+esc(s.id)+'" data-k="owned" '+(x.owned?"checked":"")+'> 所持</label> <label><input type="checkbox" data-id="'+esc(s.id)+'" data-k="master" '+(x.master?"checked":"")+'> Master</label></p><label>Lv <input class="level-input" type="number" min="1" max="5" value="'+Math.min(5,x.level||1)+'" data-id="'+esc(s.id)+'" data-k="level"></label></article>'}).join("")+'</div></section>').join("")||'<div class="empty">'+t("該当するSpriteがありません","No Sprite found")+'</div>';
   $("#grid").innerHTML=html;
-  const owned=sprites.filter(s=>item(s.id).owned).length,master=sprites.filter(s=>item(s.id).master).length;
-  $("#owned").textContent=owned;$("#master").textContent=master;$("#rate").textContent=sprites.length?Math.round(owned/sprites.length*100)+"%":"0%";
+  const releasedSprites=sprites.filter(s=>s.status==="released");
+  const owned=releasedSprites.filter(s=>item(s.id).owned).length;
+  const master=releasedSprites.filter(s=>item(s.id).master).length;
+  $("#owned").textContent=owned;
+  $("#master").textContent=master;
+  $("#totalSprites").textContent=releasedSprites.length;
+  $("#rate").textContent=releasedSprites.length?Math.round(owned/releasedSprites.length*100)+"%":"0%";
   renderExchangeSprites();
   renderNews();renderUserNotifications();
 }
@@ -177,7 +182,16 @@ function checklistPixelDetect(file){
       const cells=[];for(let r=0;r<10;r++)for(let col=0;col<10;col++){const x=xs[col],y=ys[r];cells.push({owned:redAt(x,y)>120,master:yellowAt(x,y)>184})}
       const tr=ctx.getImageData(Math.round(img.width*.40),Math.round(img.height*.06),Math.round(img.width*.20),Math.round(img.height*.13)).data;let topRed=0,topYellow=0;for(let i=0;i<tr.length;i+=4){if(tr[i]>170&&tr[i+1]<120&&tr[i+2]<120)topRed++;if(tr[i]>180&&tr[i+1]>125&&tr[i+2]<100)topYellow++}cells.unshift({owned:topRed>120,master:topYellow>120});resolve({cells,width:img.width,height:img.height})};img.onerror=reject;img.src=URL.createObjectURL(file)})}
 function renderChecklistReview(r){const s4=sprites.filter(s=>s.season==="c7s4");const rows=r.cells.map((c,i)=>{const s=s4[i];if(!s)return "";return '<label class="detect-row"><input type="checkbox" class="detected" data-index="'+i+'" '+(c.owned?"checked":"")+'> '+esc(s.name)+' <span class="badge">'+(c.master?"Master":"所持")+'</span></label>'}).join("");$("#reviewResults").innerHTML='<h3>チェックリスト認識結果</h3><p><b>'+r.cells.filter(x=>x.owned).length+' / '+r.cells.length+'</b> 所持　・　<b>'+r.cells.filter(x=>x.master).length+' / '+r.cells.length+'</b> Master</p><p>Chapter 7 Season 4・101件として解析しています。確認後に反映してください。</p><div class="detect-list">'+rows+'</div><button id="applyChecklist">認識結果を反映</button>';$("#applyChecklist").onclick=()=>{let n=0,m=0;$$(".detected:checked").forEach(el=>{const i=Number(el.dataset.index),sp=s4[i],c=r.cells[i];if(!sp||!c)return;const x=item(sp.id);if(!x.manual){x.owned=true;x.master=!!c.master;x.manual=true;x.updated_at=nowIso();n++;if(c.master)m++}});save();$("#ocrStatus").textContent=n+t("件を反映しました（Master "," item(s) applied (Master ")+m+"件）。";alert(n+"件を反映しました。\nMaster "+m+"件")}}
-$("#recognize").onclick=async()=>{if(!selectedFiles.length)return alert(t("先に画像を選択してください。","Select an image first."));const b=$("#recognize");b.disabled=true;try{const r=await checklistPixelDetect(selectedFiles[0]);recognitionResults=[r];renderChecklistReview(r);$("#ocrStatus").textContent=t("チェックリストを解析しました。候補を確認してください。","Checklist analyzed. Review the candidates before applying.")}catch(e){console.error(e);alert(t("画像を解析できませんでした。","Could not analyze the image."))}finally{b.disabled=false}};
+$("#recognize").onclick=async()=>{if(!selectedFiles.length)return alert(t("先に画像を選択してください。","Select an image first."));const b=$("#recognize");b.disabled=true;try{
+  const results=await Promise.all(selectedFiles.map(f=>checklistPixelDetect(f)));
+  const merged={cells:[]};
+  const max=Math.max(...results.map(r=>r.cells.length));
+  for(let i=0;i<max;i++){
+    merged.cells[i]={owned:results.some(r=>r.cells[i]?.owned),master:results.some(r=>r.cells[i]?.master)};
+  }
+  recognitionResults=results;renderChecklistReview(merged);
+  $("#ocrStatus").textContent=t(results.length+"枚の画像を統合して解析しました。候補を確認してください。",results.length+" image(s) were merged. Review the candidates before applying.");
+}catch(e){console.error(e);alert(t("画像を解析できませんでした。","Could not analyze the images."))}finally{b.disabled=false}};
 
 function notifyNewSprites(){const last=Number(localStorage.getItem("sprite-check-notify-count-v1")||0);if(sprites.length>last&&last>0&&typeof Notification!=="undefined"&&Notification.permission==="granted")new Notification("Sprite Check",{body:t("新しいSpriteデータが追加されました。","New Sprite data is available.")});localStorage.setItem("sprite-check-notify-count-v1",String(sprites.length))}
 $("#notifyNew").onclick=async()=>{if(!("Notification"in window))return alert(t("このブラウザは通知に対応していません。","This browser does not support notifications."));const p=await Notification.requestPermission();$("#notificationStatus").textContent=p==="granted"?t("通知を許可しました。","Notifications enabled."):t("通知は許可されませんでした。","Notifications were not enabled.");};
