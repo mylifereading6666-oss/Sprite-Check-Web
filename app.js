@@ -299,17 +299,73 @@ async function renderAdminExchanges(){
 async function moderateExchange(id,status){if(!sb||!profile)return;const {error}=await sb.from("exchange_posts").update({status}).eq("id",id);if(error)alert(error.message);else{await sb.from("audit_logs").insert({actor_id:session.user.id,action:"exchange_moderation",details:{post_id:id,status}});renderAdminExchanges();}}
 async function deleteExchange(id){if(!sb||!profile)return;if(!confirm(t("この交換募集を削除しますか？","Delete this exchange post?")))return;const {error}=await sb.from("exchange_posts").delete().eq("id",id);if(error)alert(error.message);else{await sb.from("audit_logs").insert({actor_id:session.user.id,action:"exchange_delete",details:{post_id:id}});renderAdminExchanges();}}
 async function renderAdminInquiries(){
-  const box=$("#adminInquiryList");if(!box||!sb)return;
+  const box=$("#adminInquiryList");if(!box||!sb||!profile)return;
+  const isSuper=profile.role==="superadmin";
   const r=await sb.from("inquiries").select("*").order("created_at",{ascending:false}).limit(100);
-  box.innerHTML=(r.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.subject)+'</b><small>'+esc(x.status||"open")+' · '+esc(x.user_id)+' · '+timeText(x.created_at)+'</small><div class="row"><button data-iqstatus="'+x.id+'" data-status="answered">回答済み</button><button data-iqstatus="'+x.id+'" data-status="closed" class="secondary">閉じる</button><input data-iqmsg="'+x.id+'" placeholder="回答メッセージ"><button data-iqsend="'+x.id+'">送信</button></div></div>').join("")||"<p>問い合わせなし</p>";
-  $$("[data-iqstatus]").forEach(b=>b.onclick=()=>setInquiryStatus(b.dataset.iqstatus,b.dataset.status));
-  $$("[data-iqsend]").forEach(b=>b.onclick=()=>replyInquiry(b.dataset.iqsend));
+  if(r.error){box.textContent=r.error.message;return}
+  const rows=r.data||[];
+  const label=x=>({
+    superadmin_queue:"👑 最上位管理者待機",
+    superadmin_handling:"👑 最上位管理者が対応中",
+    general_queue:"🛡️ 一般管理者待機",
+    general_handling:"🛡️ 一般管理者が対応中",
+    answered:"✅ 回答済み",
+    closed:"🔒 閉じた"
+  }[x]||x||"待機中");
+  box.innerHTML=rows.map(x=>{
+    const active=!["answered","closed"].includes(x.status);
+    const assignedMe=x.assigned_admin_id===session.user.id;
+    const claimable=active&&((isSuper&&(x.support_state!=="superadmin_handling"||assignedMe))||(!isSuper&&(x.support_state==="general_queue"||assignedMe)));
+    const passable=isSuper&&active&&x.support_state!=="general_queue"&&x.support_state!=="general_handling";
+    const controls=[];
+    if(claimable)controls.push('<button data-iqclaim="'+x.id+'">対応する</button>');
+    if(passable)controls.push('<button class="secondary" data-iqpass="'+x.id+'">一般管理者へパス</button>');
+    if(active&&(isSuper||assignedMe)){
+      controls.push('<input data-iqmsg="'+x.id+'" placeholder="回答メッセージ">');
+      controls.push('<button data-iqsend="'+x.id+'">送信</button>');
+      controls.push('<button class="secondary" data-iqstatus="'+x.id+'" data-status="closed">閉じる</button>');
+    }
+    return '<div class="list-item"><b>'+esc(x.subject)+'</b><small>'+esc(label(x.support_state))+' · '+esc(x.status||"open")+' · '+esc(x.user_id)+' · '+timeText(x.created_at)+'</small><div class="row">'+controls.join("")+'</div></div>';
+  }).join("")||"<p>問い合わせなし</p>";
+
+  $$("[data-iqclaim]").forEach(b=>b.onclick=async()=>{
+    b.disabled=true;
+    const r=await sb.rpc("claim_inquiry",{p_inquiry_id:b.dataset.iqclaim});
+    if(r.error)alert(r.error.message);else{await renderAdminInquiries();await renderAdmin()}
+  });
+  $$("[data-iqpass]").forEach(b=>b.onclick=async()=>{
+    if(!confirm(t("この問い合わせを一般管理者へパスしますか？","Pass this inquiry to a general administrator?")))return;
+    b.disabled=true;
+    const r=await sb.rpc("pass_inquiry_to_admin",{p_inquiry_id:b.dataset.iqpass});
+    if(r.error)alert(r.error.message);
+    else{
+      alert(r.data?.assigned_admin_id?t("オンラインの一般管理者へ割り当てました。","Assigned to an online general administrator."):t("一般管理者待機列へ移しました。","Moved to the general-admin queue."));
+      await renderAdminInquiries();
+    }
+  });
+  $$("[data-iqstatus]").forEach(b=>b.onclick=async()=>{
+    const r=await sb.rpc("set_inquiry_status",{p_inquiry_id:b.dataset.iqstatus,p_status:b.dataset.status});
+    if(r.error)alert(r.error.message);else await renderAdminInquiries();
+  });
+  $$("[data-iqsend]").forEach(b=>b.onclick=()=>replyInquiryRouted(b.dataset.iqsend));
 }
-async function setInquiryStatus(id,status){const {error}=await sb.from("inquiries").update({status}).eq("id",id);if(error)alert(error.message);else{await sb.from("audit_logs").insert({actor_id:session.user.id,action:"inquiry_status",details:{inquiry_id:id,status}});renderAdminInquiries();}}
-async function replyInquiry(id){
-  const input=$('[data-iqmsg="'+id+'"]'),body=input?.value.trim();if(!body)return;
-  const {error}=await sb.from("inquiry_messages").insert({inquiry_id:id,sender_id:session.user.id,body});
-  if(error)alert(error.message);else{await sb.from("inquiries").update({status:"answered"}).eq("id",id);const q=await sb.from("inquiries").select("user_id,subject").eq("id",id).single();if(q.data)await sb.from("notifications").insert({user_id:q.data.user_id,title:"問い合わせへの回答",body});await sb.from("audit_logs").insert({actor_id:session.user.id,target_user_id:q.data?.user_id,action:"inquiry_reply",details:{inquiry_id:id}});renderAdminInquiries();}
+async function replyInquiryRouted(id){
+  const input=$('[data-iqmsg="'+id+'"]'),body=input?.value.trim();if(!body||!sb||!session)return;
+  const q=await sb.from("inquiries").select("user_id,subject,status,support_state,assigned_admin_id").eq("id",id).single();
+  if(q.error||!q.data)return alert(q.error?.message||"問い合わせが見つかりません。");
+  if(profile.role==="admin"&&q.data.assigned_admin_id!==session.user.id)return alert(t("この問い合わせはあなたに割り当てられていません。","This inquiry is not assigned to you."));
+  if(profile.role==="superadmin"&&q.data.assigned_admin_id!==session.user.id){
+    const claim=await sb.rpc("claim_inquiry",{p_inquiry_id:id});if(claim.error)return alert(claim.error.message);
+  }
+  const {error}=await sb.from("inquiry_messages").insert({inquiry_id:id,sender_id:session.user.id,body,source_language:lang});
+  if(error){alert(error.message);return}
+  await sb.rpc("set_inquiry_status",{p_inquiry_id:id,p_status:"answered"});
+  const n=q.data.user_id?await sb.from("notifications").insert({user_id:q.data.user_id,title:"問い合わせへの回答",body}):null;
+  if(n?.error)console.warn(n.error);
+  await sb.from("audit_logs").insert({actor_id:session.user.id,target_user_id:q.data.user_id,action:"inquiry_reply",details:{inquiry_id:id}});
+  input.value="";
+  await renderAdminInquiries();
+  await renderInquiriesFinal();
 }
 $("#adminPostAnnouncement").onclick=postAnnouncement;
 $("#adminBroadcast").onclick=async()=>{
@@ -789,3 +845,19 @@ async function renderAdminFinal(){
 renderAdmin=renderAdminFinal;
 
 setTimeout(()=>{updateFinalRoleUi();renderSocial().catch(()=>{})},1800);
+
+
+/* Inquiry routing: keep administrator availability current for superadmin-first support handoff. */
+let adminHeartbeatTimer=null;
+async function heartbeatAdmin(){
+  if(!sb||!session||!profile||!['admin','superadmin'].includes(profile.role))return;
+  const r=await sb.rpc('admin_heartbeat');
+  if(r.error)console.warn('admin heartbeat',r.error.message);
+}
+function startAdminHeartbeat(){
+  if(adminHeartbeatTimer)clearInterval(adminHeartbeatTimer);
+  if(!profile||!['admin','superadmin'].includes(profile.role))return;
+  heartbeatAdmin();
+  adminHeartbeatTimer=setInterval(heartbeatAdmin,45000);
+}
+startAdminHeartbeat();
