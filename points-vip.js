@@ -18,7 +18,11 @@
       '<div class="stat"><span>VIP</span><b id="vipState">-</b></div>'+
       '</div>'+
       '<div class="row" style="margin-top:12px"><button id="claimDailyPoints">🎁 今日の無料ポイントを受け取る</button><span id="pointsStatus"></span></div>'+
-      '<p>ポイントは失効しません。無料ポイントの獲得履歴とVIP状態はサーバーで管理されます。</p>';
+      '<p>ポイントは失効しません。無料ポイントの獲得履歴とVIP状態はサーバーで管理されます。</p>'+
+      '<hr><h3>🎡 ポイントルーレット</h3>'+
+      '<p>1回10ポイント。通常は1日1回、VIPは1日3回まで利用できます。景品はSprite Check内のポイント報酬です。</p>'+
+      '<div class="row"><button id="spinPointRoulette">🎡 ルーレットを回す</button><span id="rouletteStatus"></span></div>'+
+      '<div id="rouletteResult" class="list"></div>';
     settings.appendChild(sec);
   }
 
@@ -62,6 +66,31 @@
     finally{if(b)b.disabled=false}
   }
 
+
+  async function spinRoulette(){
+    if(typeof sb==="undefined"||!sb||typeof session==="undefined"||!session){
+      alert(tx("先にログインしてください。","Please sign in first."));return;
+    }
+    const b=q("#spinPointRoulette");if(b)b.disabled=true;
+    q("#rouletteStatus").textContent=tx("抽選中…","Spinning…");
+    try{
+      const r=await sb.rpc("spin_point_roulette");
+      if(r.error)throw r.error;
+      const d=r.data||{};
+      if(!d.ok){
+        if(d.reason==="daily_limit") alert(tx("今日はこれ以上ルーレットを利用できません。","You have reached today's roulette limit."));
+        else if(d.reason==="insufficient_points") alert(tx("ポイントが足りません。10ポイント必要です。","You need 10 points."));
+        q("#rouletteStatus").textContent="";
+        return;
+      }
+      q("#rouletteResult").innerHTML='<div class="list-item"><b>🎉 '+escP(d.reward_label)+'</b><small>'+tx("今回の消費: ","Cost: ")+d.cost+'pt · '+tx("現在の残高: ","Balance: ")+d.balance+'pt · '+tx("本日の利用: ","Today: ")+d.used+'/'+d.daily_limit+'</small></div>';
+      q("#rouletteStatus").textContent=tx("抽選完了","Spin complete");
+      await loadPoints();
+    }catch(e){
+      q("#rouletteStatus").textContent="";
+      alert(e.message||String(e));
+    }finally{if(b)b.disabled=false}
+  }
   async function addAdminControls(){
     if(typeof profile==="undefined"||profile?.role!=="superadmin")return;
     const list=q("#userList");if(!list)return;
@@ -99,6 +128,7 @@
   function init(){
     ensurePointsPanel();
     q("#claimDailyPoints")?.addEventListener("click",claimDaily);
+    q("#spinPointRoulette")?.addEventListener("click",spinRoulette);
     loadPoints().catch(()=>{});
     const observer=new MutationObserver(()=>addAdminControls());
     const list=q("#userList");if(list)observer.observe(list,{childList:true,subtree:true});
