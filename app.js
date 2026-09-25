@@ -834,21 +834,24 @@ async function renderAdminFinal(){
   $("#adminPanel")?.classList.toggle("hidden",!ok);
   if(!ok||!sb)return;
   const heading=$("#adminPanel h2");if(heading)heading.textContent=profile.role==="superadmin"?"👑 最上位管理者":"🛡️ 管理者";
-  try{
-    const ur=await sb.functions.invoke("admin-users",{body:{}});
-    if(ur.error)throw ur.error;
-    const users=ur.data?.users||[];
-    $("#userList").innerHTML=users.map(x=>{
-      const roleButtons=profile.role==="superadmin"&&x.id!==session.user.id?
-        '<button data-role-user-final="'+x.id+'" data-role-final="admin">管理者</button><button class="secondary" data-role-user-final="'+x.id+'" data-role-final="user">一般</button>':"";
-      return '<div class="list-item"><b>'+esc(x.display_name||x.email||x.id)+'</b><small>'+esc(x.email)+' · '+esc(x.role)+' · '+timeText(x.created_at)+(x.suspended?" · 停止中":"")+'</small><div class="row"><button data-user-final="'+x.id+'">Sprite編集</button>'+roleButtons+'</div></div>';
-    }).join("")||"<p>ユーザーなし</p>";
-    $$("[data-user-final]").forEach(b=>b.onclick=()=>openAdminUser(b.dataset.userFinal));
-    $$("[data-role-user-final]").forEach(b=>b.onclick=()=>changeUserRoleFinal(b.dataset.roleUserFinal,b.dataset.roleFinal));
-  }catch(e){console.warn(e)}
-  const a=await sb.from("audit_logs").select("*").order("created_at",{ascending:false}).limit(100);
-  $("#auditList").innerHTML=(a.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.action)+'</b><small>'+esc(x.actor_id||"")+" → "+esc(x.target_user_id||"")+" · "+timeText(x.created_at)+'</small></div>').join("")||"<p>ログなし</p>";
-  await renderAdminExchanges();await renderAdminInquiries();await renderAdminAnnouncements();
+  if(profile.role==="superadmin"){
+    try{
+      const ur=await sb.functions.invoke("admin-users",{body:{}});
+      if(ur.error)throw ur.error;
+      const users=ur.data?.users||[];
+      $("#userList").innerHTML=users.map(x=>{
+        const roleButtons=x.id!==session.user.id?
+          '<button data-role-user-final="'+x.id+'" data-role-final="admin">管理者</button><button class="secondary" data-role-user-final="'+x.id+'" data-role-final="user">一般</button>':"";
+        return '<div class="list-item"><b>'+esc(x.display_name||x.email||x.id)+'</b><small>'+esc(x.email)+' · '+esc(x.role)+' · '+timeText(x.created_at)+(x.suspended?" · 停止中":"")+'</small><div class="row"><button data-user-final="'+x.id+'">Sprite編集</button>'+roleButtons+'</div></div>';
+      }).join("")||"<p>ユーザーなし</p>";
+      $("[data-user-final]").forEach(b=>b.onclick=()=>openAdminUser(b.dataset.userFinal));
+      $("[data-role-user-final]").forEach(b=>b.onclick=()=>changeUserRoleFinal(b.dataset.roleUserFinal,b.dataset.roleFinal));
+      const a=await sb.from("audit_logs").select("*").order("created_at",{ascending:false}).limit(100);
+      $("#auditList").innerHTML=(a.data||[]).map(x=>'<div class="list-item"><b>'+esc(x.action)+'</b><small>'+esc(x.actor_id||"")+" → "+esc(x.target_user_id||"")+" · "+timeText(x.created_at)+'</small></div>').join("")||"<p>ログなし</p>";
+      await renderAdminExchanges();await renderAdminAnnouncements();
+    }catch(e){console.warn(e)}
+  }
+  await renderAdminInquiries();
 }
 renderAdmin=renderAdminFinal;
 
