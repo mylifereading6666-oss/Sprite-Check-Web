@@ -301,22 +301,18 @@ async function deleteExchange(id){if(!sb||!profile)return;if(!confirm(t("この�
 async function renderAdminInquiries(){
   const box=$("#adminInquiryList");if(!box||!sb||!profile)return;
   const isSuper=profile.role==="superadmin";
-  const r=await sb.from("inquiries").select("*").order("created_at",{ascending:false}).limit(100);
+  const query=isSuper
+    ? sb.from("inquiries").select("*").order("created_at",{ascending:false}).limit(100)
+    : sb.from("inquiries").select("*").eq("inquiry_type","sprite_manual_fix").or("assigned_admin_id.eq."+session.user.id+",support_state.eq.general_queue").order("created_at",{ascending:false}).limit(100);
+  const r=await query;
   if(r.error){box.textContent=r.error.message;return}
   const rows=r.data||[];
-  const label=x=>({
-    superadmin_queue:"👑 最上位管理者待機",
-    superadmin_handling:"👑 最上位管理者が対応中",
-    general_queue:"🛡️ 一般管理者待機",
-    general_handling:"🛡️ 一般管理者が対応中",
-    answered:"✅ 回答済み",
-    closed:"🔒 閉じた"
-  }[x]||x||"待機中");
+  const label=x=>({superadmin_queue:"👑 最上位管理者待機",superadmin_handling:"👑 最上位管理者が対応中",general_queue:"🛡️ 一般管理者待機",general_handling:"🛡️ 一般管理者が対応中",answered:"✅ 回答済み",closed:"🔒 閉じた"}[x]||x||"待機中");
   box.innerHTML=rows.map(x=>{
     const active=!["answered","closed"].includes(x.status);
     const assignedMe=x.assigned_admin_id===session.user.id;
     const claimable=active&&((isSuper&&(x.support_state!=="superadmin_handling"||assignedMe))||(!isSuper&&(x.support_state==="general_queue"||assignedMe)));
-    const passable=isSuper&&active&&x.support_state!=="general_queue"&&x.support_state!=="general_handling";
+    const passable=isSuper&&active&&x.inquiry_type==="sprite_manual_fix"&&x.support_state!=="general_queue"&&x.support_state!=="general_handling";
     const controls=[];
     if(claimable)controls.push('<button data-iqclaim="'+x.id+'">対応する</button>');
     if(passable)controls.push('<button class="secondary" data-iqpass="'+x.id+'">一般管理者へパス</button>');
@@ -325,29 +321,39 @@ async function renderAdminInquiries(){
       controls.push('<button data-iqsend="'+x.id+'">送信</button>');
       controls.push('<button class="secondary" data-iqstatus="'+x.id+'" data-status="closed">閉じる</button>');
     }
-    return '<div class="list-item"><b>'+esc(x.subject)+'</b><small>'+esc(label(x.support_state))+' · '+esc(x.status||"open")+' · '+esc(x.user_id)+' · '+timeText(x.created_at)+'</small><div class="row">'+controls.join("")+'</div></div>';
-  }).join("")||"<p>問い合わせなし</p>";
+    if(!isSuper&&x.inquiry_type==="sprite_manual_fix"&&assignedMe){
+      controls.push('<button data-spritefix="'+x.id+'">精霊を手動修正</button>');
+    }
+    return '<div class="list-item"><b>'+esc(x.subject)+'</b><small>'+esc(x.inquiry_type==="sprite_manual_fix"?"🧚 精霊の手動修正":"その他")+' · '+esc(label(x.support_state))+' · '+esc(x.status||"open")+' · '+timeText(x.created_at)+'</small><div class="row">'+controls.join("")+'</div></div>';
+  }).join("")||"<p>対応可能な問い合わせはありません。</p>";
 
   $$("[data-iqclaim]").forEach(b=>b.onclick=async()=>{
-    b.disabled=true;
-    const r=await sb.rpc("claim_inquiry",{p_inquiry_id:b.dataset.iqclaim});
-    if(r.error)alert(r.error.message);else{await renderAdminInquiries();await renderAdmin()}
-  });
-  $$("[data-iqpass]").forEach(b=>b.onclick=async()=>{
-    if(!confirm(t("この問い合わせを一般管理者へパスしますか？","Pass this inquiry to a general administrator?")))return;
-    b.disabled=true;
-    const r=await sb.rpc("pass_inquiry_to_admin",{p_inquiry_id:b.dataset.iqpass});
-    if(r.error)alert(r.error.message);
-    else{
-      alert(r.data?.assigned_admin_id?t("オンラインの一般管理者へ割り当てました。","Assigned to an online general administrator."):t("一般管理者待機列へ移しました。","Moved to the general-admin queue."));
-      await renderAdminInquiries();
-    }
-  });
-  $$("[data-iqstatus]").forEach(b=>b.onclick=async()=>{
-    const r=await sb.rpc("set_inquiry_status",{p_inquiry_id:b.dataset.iqstatus,p_status:b.dataset.status});
+    b.disabled=true;const r=await sb.rpc("claim_inquiry",{p_inquiry_id:b.dataset.iqclaim});
     if(r.error)alert(r.error.message);else await renderAdminInquiries();
   });
+  $$("[data-iqpass]").forEach(b=>b.onclick=async()=>{
+    if(!confirm(t("精霊の手動修正問い合わせを一般管理者へパスしますか？","Pass this Sprite manual-correction inquiry to a general administrator?")))return;
+    b.disabled=true;const r=await sb.rpc("pass_inquiry_to_admin",{p_inquiry_id:b.dataset.iqpass});
+    if(r.error)alert(r.error.message);else{alert(r.data?.assigned_admin_id?t("オンラインの一般管理者へ割り当てました。","Assigned to an online general administrator."):t("一般管理者待機列へ移しました。","Moved to the general-admin queue."));await renderAdminInquiries();}
+  });
+  $$("[data-iqstatus]").forEach(b=>b.onclick=async()=>{const r=await sb.rpc("set_inquiry_status",{p_inquiry_id:b.dataset.iqstatus,p_status:b.dataset.status});if(r.error)alert(r.error.message);else await renderAdminInquiries()});
   $$("[data-iqsend]").forEach(b=>b.onclick=()=>replyInquiryRouted(b.dataset.iqsend));
+  $$("[data-spritefix]").forEach(b=>b.onclick=()=>openSpriteManualFix(b.dataset.spritefix));
+}
+async function openSpriteManualFix(inquiryId){
+  if(!sb||!session||profile?.role!=="admin")return;
+  const q=await sb.from("inquiries").select("user_id,subject").eq("id",inquiryId).single();
+  if(q.error||!q.data)return alert(q.error?.message||"問い合わせが見つかりません。");
+  const spriteId=prompt(t("修正する精霊のIDを入力してください。","Enter the Sprite ID to correct."));
+  if(!spriteId)return;
+  const owned=confirm(t("この精霊を所持済みにしますか？\nOK=所持 / キャンセル=未所持","Mark this Sprite as owned?"));
+  const master=confirm(t("この精霊をマスターにしますか？\nOK=マスター / キャンセル=通常","Mark this Sprite as Master?"));
+  const levelText=prompt(t("レベルを1〜5で入力してください。","Enter level 1-5."),"1");
+  const level=Number(levelText);if(!Number.isInteger(level)||level<1||level>5)return alert(t("レベルは1〜5です。","Level must be 1-5."));
+  const r=await sb.rpc("admin_correct_sprite_state",{p_inquiry_id:inquiryId,p_user_id:q.data.user_id,p_sprite_id:spriteId,p_owned:owned,p_master:master,p_level:level});
+  if(r.error)return alert(r.error.message);
+  alert(t("精霊の手動修正を適用しました。","Sprite manual correction applied."));
+  await renderAdminInquiries();
 }
 async function replyInquiryRouted(id){
   const input=$('[data-iqmsg="'+id+'"]'),body=input?.value.trim();if(!body||!sb||!session)return;
@@ -806,8 +812,8 @@ renderSocial=async function(){
 
 $("#createInquiry")?.addEventListener("click",async()=>{
   if(!sb||!session)return alert(t("ログインしてください。","Sign in first."));
-  const subject=$("#inquirySubject").value.trim();if(!subject)return;
-  const {data,error}=await sb.from("inquiries").insert({user_id:session.user.id,subject,status:"open"}).select("id").single();
+  const subject=$("#inquirySubject").value.trim();const inquiry_type=$("#inquiryType")?.value||"other";if(!subject)return;
+  const {data,error}=await sb.from("inquiries").insert({user_id:session.user.id,subject,inquiry_type,status:"open"}).select("id").single();
   if(error)alert(error.message);else{$("#inquirySubject").value="";activeInquiry=data.id;await renderInquiriesFinal()}
 });
 
