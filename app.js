@@ -51,7 +51,7 @@ function makeSeason4Catalog(raw){
 function mergeCatalog(raw){return [...makeSeason4Catalog(raw),...raw.filter(x=>x.season==="c7s3")]}
 function normalizeCatalog(raw){try{return mergeCatalog(parseSource(raw))}catch{return sprites}}
 function makeUpcomingCatalog(){const out=[];for(const x of UPCOMING_FALLBACK){for(const v of ["base","gold","cheatmaster","loothacker","bountyhunter"]){const date=x.releaseDate;out.push({id:"upcoming-"+slug(x.parent)+"-"+v,name:x.parent+" · "+(variantNames[v]||v),season:"c7s4",releaseDate:date,status:"upcoming",imageUrl:"",isNew:true,rarity:x.parent==="Birthday"?"rare":x.parent==="Morgana"?"epic":"",source:x.source})}}return out}
-async function fetchTrustedUpcoming(){try{const res=await fetch(TRUSTED_UPDATES_SOURCE+"?t="+Date.now(),{cache:"no-store"});if(!res.ok)throw new Error("HTTP "+res.status);const text=await res.text();const lower=text.toLowerCase();const out=makeUpcomingCatalog();if(lower.includes("birthday")&&!lower.includes("2026-09-26")){}return out}catch{return makeUpcomingCatalog()}}
+async function fetchTrustedUpcoming(){try{const ctl=new AbortController();const timer=setTimeout(()=>ctl.abort(),8000);const res=await fetch(TRUSTED_UPDATES_SOURCE+"?t="+Date.now(),{cache:"no-store",signal:ctl.signal});clearTimeout(timer);if(!res.ok)throw new Error("HTTP "+res.status);const text=await res.text();const lower=text.toLowerCase();const out=makeUpcomingCatalog();if(lower.includes("birthday")&&!lower.includes("2026-09-26")){}return out}catch{return makeUpcomingCatalog()}}
 
 async function syncSprites(force=false){
   const now=Date.now();
@@ -442,10 +442,10 @@ $("#sync").onclick=async()=>{const b=$("#sync");b.disabled=true;b.textContent=t(
 if(localStorage.getItem("sprite-theme")==="dark")document.body.classList.add("dark");
 
 document.body.classList.toggle("dark",localStorage.getItem("sprite-theme")==="dark");applyLanguage();renderAuth();render();renderExchangeSprites();renderNews();setSyncStatus(null);setApiStatus("☁️ サーバーへ自動接続しています…");
-syncSprites(true).then(setSyncStatus);
+syncSprites(true).then(setSyncStatus).catch(()=>setSyncStatus({ok:false,count:0,time:0,source:"取得失敗"}));
 connectSupabase().catch(e=>setApiStatus("⚠️ "+e.message));
 openPage("sprites");
-setInterval(()=>syncSprites(true).then(setSyncStatus),REFRESH_MS);
+setInterval(()=>syncSprites(true).then(setSyncStatus).catch(()=>setSyncStatus({ok:false,count:0,time:0,source:"取得失敗"})),REFRESH_MS);
 if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
 
 
